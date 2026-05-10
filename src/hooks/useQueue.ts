@@ -37,6 +37,20 @@ export function useQueue() {
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const removeEntryFromState = useCallback((entryId: string) => {
+    setEntries(prev => prev.filter(e => e.id !== entryId));
+    setInCabinetEntries(prev => prev.filter(e => e.id !== entryId));
+  }, []);
+
+  const isQueueEntryCompletionConflict = (error: { code?: string; message?: string; details?: string; hint?: string } | null) => {
+    if (!error || (error.code !== '23503' && error.code !== '23505')) {
+      return false;
+    }
+
+    const text = `${error.message ?? ''} ${error.details ?? ''} ${error.hint ?? ''}`.toLowerCase();
+    return text.includes('queue_entry_id') || text.includes('completed_clients_queue_entry_id_fkey');
+  };
+
   const fetchDoctors = useCallback(async () => {
     const { data } = await supabase.from('doctors').select('*');
     if (data) setDoctors(data);
@@ -317,12 +331,27 @@ export function useQueue() {
       notes: notes?.trim() || null,
     });
 
-    if (entry.appointment_id) {
-      // Mark appointment as 'attended'
-      await supabase.from('appointments').update({ status: 'attended' }).eq('id', entry.appointment_id);
+    if (insertError) {
+      if (isQueueEntryCompletionConflict(insertError)) {
+        const { data: existingEntry, error: existingEntryError } = await supabase
+          .from('queue_entries')
+          .select('id')
+          .eq('id', entryId)
+          .maybeSingle();
+
+        if (!existingEntryError && !existingEntry) {
+          removeEntryFromState(entryId);
+          return { error: null, alreadyCompleted: true };
+        }
+      }
+
+      return { error: insertError, alreadyCompleted: false };
     }
 
-    if (insertError) return { error: insertError };
+    if (entry.appointment_id) {
+      // Mark appointment as 'attended' only after the treatment record is safely stored.
+      await supabase.from('appointments').update({ status: 'attended' }).eq('id', entry.appointment_id);
+    }
 
     // Delete from queue_entries
     const { error } = await supabase
@@ -331,11 +360,10 @@ export function useQueue() {
       .eq('id', entryId);
 
     if (!error) {
-      setInCabinetEntries(prev => prev.filter(e => e.id !== entryId));
-      setEntries(prev => prev.filter(e => e.id !== entryId));
+      removeEntryFromState(entryId);
     }
 
-    return { error };
+    return { error, alreadyCompleted: false };
   };
 
   const getStats = () => {

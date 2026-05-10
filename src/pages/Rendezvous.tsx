@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -52,17 +53,17 @@ interface Doctor {
 }
 
 const TREATMENTS = [
-    'Peeling carbonique',
-    'Hydrafacial',
-    'Nettoyage de peau',
-    'Rehaussement de cils',
-    'Browlift',
-    'Extension de cils',
-    'Epilation sourcils',
-    'Teinture sourcils',
-    'Epilation a la cire',
-    'Epilation au laser',
-    'Consultation'
+    'Extraction simple',
+    'Extraction chirurgicale',
+    'Obturation (Plombage)',
+    'Traitement de canal',
+    'Détartrage & Polissage',
+    'Blanchiment dentaire',
+    'Prothèse fixe (Couronne)',
+    'Prothèse amovible',
+    'Implant dentaire',
+    'Appareil orthodontique',
+    'Consultation dentaire'
 ];
 
 const Rendezvous = () => {
@@ -656,30 +657,15 @@ const Rendezvous = () => {
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
-                    <Button variant="ghost" size="icon" onClick={() => setIsSearchOpen(!isSearchOpen)} className="sm:hidden h-9 w-9">
-                        <Search className="h-5 w-5" />
-                    </Button>
-                    <Button variant="ghost" size="icon" onClick={() => window.location.href = '/accueil'} className="h-9 w-9">
-                        <LogOut className="h-5 w-5" />
+                    <Button variant="ghost" size="icon" asChild className="h-9 w-9">
+                        <Link to="/accueil">
+                            <Users className="h-5 w-5" />
+                        </Link>
                     </Button>
                 </div>
             </header>
 
-            {/* Mobile Search Bar */}
-            {isSearchOpen && (
-                <div className="px-4 pb-4 sm:hidden animate-in slide-in-from-top-2 fade-in">
-                    <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input
-                            autoFocus
-                            placeholder="Rechercher patient..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            className="pl-10 h-11 rounded-xl bg-muted/30 border-none focus-visible:ring-primary/20"
-                        />
-                    </div>
-                </div>
-            )}
+            {/* Mobile Search Bar removed as requested */}
 
             <main className="p-4 flex-1 space-y-6">
                 <Tabs defaultValue="upcoming" className="w-full">

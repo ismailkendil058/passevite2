@@ -314,55 +314,49 @@ const Website = () => {
       </main>
 
       {/* Footer */}
-      <footer className="bg-white py-24 text-center">
+      <footer className="bg-white py-12 text-center">
         <div className="mx-auto max-w-7xl px-6 lg:px-10">
-          <div className="grid gap-16 sm:grid-cols-2 border-b border-[#F7F7FD] pb-24 mb-16">
-            <div className="space-y-8 flex flex-col items-center">
-              <span className="font-serif text-5xl font-bold tracking-tighter">passevite</span>
-              <p className="text-sm text-[#7A7A7A] leading-relaxed max-w-[300px]">
+          <div className="grid gap-8 sm:grid-cols-2 border-b border-[#F7F7FD] pb-12 mb-10">
+            <div className="space-y-4 flex flex-col items-center">
+              <span className="font-serif text-4xl font-bold tracking-tighter">passevite</span>
+              <p className="text-xs text-[#7A7A7A] leading-relaxed max-w-[280px]">
                 Clinique dentaire et orthodontique de prestige au cœur de Bab Ezzouar.
               </p>
             </div>
-            <div className="space-y-8 flex flex-col items-center">
-              <h4 className="text-base font-bold uppercase tracking-[0.4em] text-[#5C5CD6]">Suivez-nous</h4>
-              <div className="flex justify-center gap-10">
+            <div className="space-y-4 flex flex-col items-center">
+              <h4 className="text-sm font-bold uppercase tracking-[0.4em] text-[#5C5CD6]">Suivez-nous</h4>
+              <div className="flex justify-center gap-8">
                 <a href="https://instagram.com/passevite_clinic" target="_blank" rel="noopener noreferrer" className="transition-transform hover:scale-125">
-                  <Instagram className="h-8 w-8 text-[#1F1F3D] hover:text-[#5C5CD6] transition-colors" />
+                  <Instagram className="h-6 w-6 text-[#1F1F3D] hover:text-[#5C5CD6] transition-colors" />
                 </a>
                 <a href="https://wa.me/213554029732" target="_blank" rel="noopener noreferrer" className="transition-transform hover:scale-125">
-                  <MessageCircle className="h-8 w-8 text-[#1F1F3D] hover:text-[#5C5CD6] transition-colors" />
+                  <MessageCircle className="h-6 w-6 text-[#1F1F3D] hover:text-[#5C5CD6] transition-colors" />
                 </a>
               </div>
             </div>
           </div>
 
           {/* Maps Card */}
-          <div className="mb-20 flex justify-center">
-            <a
-              href={clinic.mapsUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="group block w-full max-w-3xl overflow-hidden rounded-[3rem] bg-[#5C5CD6]/5 border border-[#5C5CD6]/10 p-2 transition-all hover:bg-[#5C5CD6]/10 hover:border-[#5C5CD6]/20"
+          <div className="mb-10 flex justify-center px-4">
+            <div
+              className="group w-full max-w-2xl overflow-hidden rounded-[2.5rem] bg-[#5C5CD6]/5 border border-[#5C5CD6]/10 p-1.5 transition-all hover:bg-[#5C5CD6]/10 hover:border-[#5C5CD6]/20"
             >
-              <div className="relative aspect-[21/9] w-full overflow-hidden rounded-[2.8rem] bg-[#E5E1DC]">
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="text-center space-y-4">
-                    <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-white text-[#5C5CD6] shadow-xl group-hover:scale-110 transition-transform">
-                      <MapPin className="h-8 w-8" />
-                    </div>
-                    <p className="font-serif text-2xl sm:text-3xl font-bold tracking-tighter text-[#1F1F3D] uppercase">
-                      Visitez PasseVite
-                    </p>
-                    <p className="text-xs uppercase tracking-[0.4em] text-[#5C5CD6]">{clinic.location}</p>
-                  </div>
-                </div>
-                <div className="absolute inset-0 opacity-[0.05] pointer-events-none"
-                  style={{ backgroundImage: 'radial-gradient(#5C5CD6 1px, transparent 1px)', backgroundSize: '30px 30px' }} />
+              <div className="relative aspect-square w-full overflow-hidden rounded-[2.2rem] bg-[#E5E1DC]">
+                <iframe
+                  src="https://maps.google.com/maps?q=36.7330258,3.1849117&t=&z=16&ie=UTF8&iwloc=&output=embed"
+                  width="100%"
+                  height="100%"
+                  style={{ border: 0 }}
+                  allowFullScreen
+                  loading="lazy"
+                  referrerPolicy="no-referrer-when-downgrade"
+                  className="absolute inset-0 grayscale-[0.2] contrast-125 group-hover:grayscale-0 transition-all duration-700"
+                />
               </div>
-            </a>
+            </div>
           </div>
 
-          <p className="text-xs uppercase tracking-[0.5em] text-[#A0A0A0] font-medium">
+          <p className="text-[10px] uppercase tracking-[0.4em] text-[#A0A0A0] font-medium">
             &copy; {new Date().getFullYear()} PasseVite Clinic. Excellence Dentaire.
           </p>
         </div>

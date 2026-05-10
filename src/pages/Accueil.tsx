@@ -20,17 +20,17 @@ import { fr } from 'date-fns/locale';
 
 
 const TREATMENTS = [
-  'Peeling carbonique',
-  'Hydrafacial',
-  'Nettoyage de peau',
-  'Rehaussement de cils',
-  'Browlift',
-  'Extension de cils',
-  'Epilation sourcils',
-  'Teinture sourcils',
-  'Epilation a la cire',
-  'Epilation au laser',
-  'Consultation'
+  'Extraction simple',
+  'Extraction chirurgicale',
+  'Obturation (Plombage)',
+  'Traitement de canal',
+  'Détartrage & Polissage',
+  'Blanchiment dentaire',
+  'Prothèse fixe (Couronne)',
+  'Prothèse amovible',
+  'Implant dentaire',
+  'Appareil orthodontique',
+  'Consultation dentaire'
 ];
 
 
@@ -127,7 +127,7 @@ const QueueItem = React.memo(({ entry, index, onEdit, onDelete, onNext }: { entr
 
 const Accueil = () => {
   const { user, signOut } = useAuth();
-  const { entries, inCabinetEntries, activeSession, doctors, loading, openSession, closeSession, addClient, callClient, completeClient, getStats, updateClient, deleteClient, updateCompletedClient, deleteCompletedClient } = useQueue();
+  const { entries, inCabinetEntries, doctors, loading, addClient, callClient, completeClient, updateClient, deleteClient, updateCompletedClient, deleteCompletedClient } = useQueue();
 
   const [isManagerAuthorized, setIsManagerAuthorized] = useState(false);
   const [managerPassword, setManagerPassword] = useState('');
@@ -193,6 +193,7 @@ const Accueil = () => {
   const [expenseAmount, setExpenseAmount] = useState('');
   const [expenseDesc, setExpenseDesc] = useState('');
   const [savingExpense, setSavingExpense] = useState(false);
+  const [isCompletingClient, setIsCompletingClient] = useState(false);
   // Channel Choice Modal
   const [showChannelChoice, setShowChannelChoice] = useState(false);
   const [lastCompletedPatient, setLastCompletedPatient] = useState<{ name: string; phone: string; treatment: string } | null>(null);
@@ -238,8 +239,18 @@ const Accueil = () => {
   const [showTreatmentSuggestions, setShowTreatmentSuggestions] = useState(false);
 
 
-  // Memoize statistics to avoid recalculating on every render
-  const stats = useMemo(() => getStats(), [entries, inCabinetEntries, getStats]);
+  const stats = useMemo(() => {
+    const stats = { U: { current: 0, total: 0 }, N: { current: 0, total: 0 }, R: { current: 0, total: 0 } };
+    const waiting = entries.filter(e => e.status === 'waiting');
+
+    (['U', 'N', 'R'] as const).forEach(state => {
+      const stateEntries = waiting.filter(e => e.state === state);
+      stats[state].current = stateEntries.length > 0 ? stateEntries[0].state_number : 0;
+      stats[state].total = stateEntries.length;
+    });
+
+    return stats;
+  }, [entries]);
 
   // Load persisted treatments from localStorage once
   useEffect(() => {
@@ -248,6 +259,12 @@ const Accueil = () => {
       if (raw) {
         const parsed = JSON.parse(raw) as string[];
         if (Array.isArray(parsed)) {
+          // If the cached list contains old treatments, clear it
+          if (parsed.some(t => ['Peeling carbonique', 'Hydrafacial', 'Nettoyage de peau'].includes(t))) {
+            localStorage.removeItem('pv_treatments');
+            setTreatmentsList(TREATMENTS);
+            return;
+          }
           // Merge with default treatments preserving uniqueness
           const merged = Array.from(new Set([...parsed, ...TREATMENTS]));
           setTreatmentsList(merged);
@@ -270,28 +287,7 @@ const Accueil = () => {
   }, [doctors, entries]);
 
 
-  const handleOpenSession = async () => {
-    if (!user) return;
-    const { error } = await openSession(user.id);
-    if (error) toast.error('Erreur lors de l\'ouverture de la séance');
-    else toast.success('Nouvelle séance ouverte');
-  };
-
-  const handleCloseSession = async () => {
-    // Check if there are clients in waiting list or in-cabinet
-    if (entries.length > 0 || inCabinetEntries.length > 0) {
-      const waitingCount = entries.length;
-      const inCabinetCount = inCabinetEntries.length;
-      toast.error(
-        `Impossible de fermer la séance avec ${waitingCount + inCabinetCount} patient(s) en attente (${waitingCount} en file d'attente, ${inCabinetCount} au cabinet)`
-      );
-      return;
-    }
-
-    const { error } = await closeSession();
-    if (error) toast.error('Erreur lors de la fermeture de la séance');
-    else toast.success('Séance fermée avec succès');
-  };
+  // Removed handleOpenSession and handleCloseSession as séance logic is being removed.
 
   const handleAddClient = async () => {
     if (!newPhone.trim() || !newDoctorId) {
@@ -462,17 +458,30 @@ const Accueil = () => {
       toast.error('Veuillez remplir tous les champs');
       return;
     }
-    const { error } = await completeClient(
-      selectedEntry.id,
-      clientName,
-      treatment,
-      parseFloat(totalAmount) || 0,
-      parseFloat(tranchePaid) || 0,
-      user.id,
-      completeNotes
-    );
-    if (error) toast.error('Erreur');
-    else {
+    if (isCompletingClient) return;
+
+    setIsCompletingClient(true);
+
+    try {
+      const { error, alreadyCompleted } = await completeClient(
+        selectedEntry.id,
+        clientName,
+        treatment,
+        parseFloat(totalAmount) || 0,
+        parseFloat(tranchePaid) || 0,
+        user.id,
+        completeNotes
+      );
+      if (error) {
+        toast.error('Erreur lors de la validation du patient');
+        return;
+      }
+
+      if (alreadyCompleted) {
+        toast.success('Ce patient a deja ete traite');
+        setShowCompleteModal(false);
+        return;
+      }
       if (hasNextAppt && nextApptDate) {
         const [hours, minutes] = nextApptTime.split(':');
         const appointmentAt = new Date(nextApptDate);
@@ -496,7 +505,7 @@ const Accueil = () => {
       // Prepare data for the choice modal
       setLastCompletedPatient({
         name: clientName,
-        phone: selectedEntry!.phone,
+        phone: selectedEntry.phone,
         treatment: treatment
       });
 
@@ -519,6 +528,8 @@ const Accueil = () => {
       }
 
       setShowCompleteModal(false);
+    } finally {
+      setIsCompletingClient(false);
     }
   };
 
@@ -606,43 +617,24 @@ const Accueil = () => {
     );
   }
 
-  if (!activeSession) {
-    return (
-      <div className="min-h-[100dvh] bg-background flex flex-col">
-        <header className="flex items-center justify-between p-3 sm:p-4 border-b">
-          <div>
-            <h1 className="text-lg sm:text-xl font-bold text-foreground italic">PasseVite</h1>
-            <p className="text-[10px] text-muted-foreground uppercase">le soin qui passe</p>
-          </div>
-          <Button variant="ghost" size="icon" onClick={signOut}><LogOut className="h-4 w-4" /></Button>
-        </header>
-        <div className="flex-1 flex items-center justify-center p-4">
-          <Card className="w-full max-w-sm text-center border-0 shadow-lg">
-            <CardContent className="p-6 sm:p-8 space-y-6">
-              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-secondary flex items-center justify-center mx-auto">
-                <Clock className="h-7 w-7 sm:h-8 sm:w-8 text-primary" />
-              </div>
-              <div>
-                <h2 className="text-lg sm:text-xl font-semibold text-foreground">Bienvenue</h2>
-                <p className="text-sm text-muted-foreground mt-1">Aucune séance active</p>
-              </div>
-              <Button onClick={handleOpenSession} className="w-full h-12 text-base">
-                Ouvrir une nouvelle séance
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    );
-  }
+  // séance removed, direct access to dashboard.
 
   return (
     <div className="min-h-[100dvh] bg-background flex flex-col">
       {/* Header */}
       <header className="flex items-center justify-between p-3 sm:p-4 border-b sticky top-0 bg-background z-10">
-        <div className="min-w-0">
-          <h1 className="text-lg sm:text-xl font-bold text-foreground italic leading-none">PasseVite</h1>
-          <p className="text-[10px] text-muted-foreground truncate uppercase">le soin qui passe</p>
+        <div className="flex items-center gap-2.5">
+          <div className="p-1 rounded-lg bg-white shadow-lg shadow-primary/5 border border-primary/5 shrink-0 hidden sm:block">
+            <img src="/VitalWeb.png" alt="Logo" className="h-6 w-6 object-contain" />
+          </div>
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl font-black text-primary tracking-tighter italic leading-none">
+              PasseVite
+            </h1>
+            <p className="text-[9px] text-muted-foreground truncate uppercase font-medium tracking-widest hidden sm:block">
+              Le soin qui passe vite
+            </p>
+          </div>
         </div>
         <div className="flex gap-1.5 sm:gap-2 mx-auto">
           <Button onClick={async () => {
@@ -671,38 +663,7 @@ const Accueil = () => {
           </Link>
 
 
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="destructive" size="sm" className="hidden sm:flex h-8 px-3 text-[11px] font-black uppercase tracking-widest" disabled={entries.length > 0 || inCabinetEntries.length > 0}>
-                <XCircle className="h-3.5 w-3.5 mr-1.5" /> Fermer
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogTrigger asChild>
-              <Button variant="destructive" size="icon" className="sm:hidden h-8 w-8 rounded-full" disabled={entries.length > 0 || inCabinetEntries.length > 0}>
-                <XCircle className="h-4 w-4" />
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent className="max-w-[calc(100vw-2rem)]">
-              <AlertDialogHeader>
-                <AlertDialogTitle>Fermer la séance ?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  {entries.length > 0 || inCabinetEntries.length > 0 ? (
-                    <span className="text-destructive">
-                      Impossible de fermer la séance : {entries.length + inCabinetEntries.length} patient(s) en attente
-                      ({entries.length} en file d'attente, {inCabinetEntries.length} au cabinet).
-                      Veuillez traiter ou supprimer tous les patients avant de fermer la séance.
-                    </span>
-                  ) : (
-                    'Cette action va fermer la séance actuelle. La file d\'attente sera remise à zéro et l\'écran TV sera réinitialisé.'
-                  )}
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Annuler</AlertDialogCancel>
-                <AlertDialogAction onClick={handleCloseSession} disabled={entries.length > 0 || inCabinetEntries.length > 0}>Confirmer</AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+          {/* Session close removed */}
           <Button variant="ghost" size="icon" onClick={signOut} className="h-8 w-8"><LogOut className="h-4 w-4" /></Button>
         </div>
       </header>
@@ -1275,7 +1236,9 @@ const Accueil = () => {
             </div>
           </div>
           <DialogFooter>
-            <Button onClick={handleComplete} className="w-full h-11 sm:h-12">Confirmer</Button>
+            <Button onClick={handleComplete} disabled={isCompletingClient} className="w-full h-11 sm:h-12">
+              {isCompletingClient ? 'Enregistrement...' : 'Confirmer'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
