@@ -119,7 +119,6 @@ const MedecinDashboard = () => {
     }, [doctorInfo]);
 
     const handleSignOut = async () => {
-        localStorage.removeItem('doctor_auth');
         await signOut();
         toast.success('Déconnecté avec succès');
         navigate('/');

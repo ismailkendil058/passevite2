@@ -40,7 +40,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signIn = async (username: string, password: string) => {
     try {
       // Query our custom 'roles' table
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('roles')
         .select('*')
         .eq('username', username)
@@ -70,6 +70,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     localStorage.removeItem('passevite_user');
+    localStorage.removeItem('doctor_auth');
     setUser(null);
     setUserRole(null);
   };

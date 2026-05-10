@@ -141,14 +141,26 @@ const Accueil = () => {
   const [ecPaid, setEcPaid] = useState('');
   const [ecNotes, setEcNotes] = useState('');
 
-  const handleVerifyManager = () => {
-    if (managerPassword === 'admin123') {
+  const handleVerifyManager = async () => {
+    try {
+      const { data, error } = await (supabase as any)
+        .from('roles')
+        .select('id')
+        .in('role', ['manager', 'admin'])
+        .eq('password', managerPassword)
+        .limit(1);
+
+      if (error || !data || data.length === 0) {
+        toast.error('Mot de passe incorrect');
+        return;
+      }
+
       setIsManagerAuthorized(true);
       setShowPasswordDialog(false);
       setManagerPassword('');
       toast.success('Mode édition activé');
-    } else {
-      toast.error('Mot de passe incorrect');
+    } catch (err) {
+      toast.error('Erreur de vérification');
     }
   };
 

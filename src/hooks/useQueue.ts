@@ -314,9 +314,23 @@ export function useQueue() {
     const entry = entries.find(e => e.id === entryId) || inCabinetEntries.find(e => e.id === entryId);
     if (!entry || !activeSession) return { error: new Error('Entrée introuvable') };
 
-    // Insert completed record
+    // Check if this queue entry was already completed (prevents duplicate on double-click)
+    const { data: existing } = await supabase
+      .from('completed_clients')
+      .select('id')
+      .eq('client_id', entry.client_id)
+      .eq('session_id', activeSession.id)
+      .maybeSingle();
+
+    if (existing) {
+      // Already completed — just clean up the UI
+      removeEntryFromState(entryId);
+      return { error: null, alreadyCompleted: true };
+    }
+
+    // Insert completed record (queue_entry_id set to null to avoid FK issues
+    // when queue entry gets deleted after completion)
     const { error: insertError } = await supabase.from('completed_clients').insert({
-      queue_entry_id: entry.id,
       session_id: activeSession.id,
       client_name: clientName.trim(),
       phone: entry.phone,
@@ -327,22 +341,14 @@ export function useQueue() {
       total_amount: totalAmount,
       tranche_paid: tranchePaid,
       receptionist_id: receptionistId,
-      appointment_id: entry.appointment_id,
       notes: notes?.trim() || null,
     });
 
     if (insertError) {
-      if (isQueueEntryCompletionConflict(insertError)) {
-        const { data: existingEntry, error: existingEntryError } = await supabase
-          .from('queue_entries')
-          .select('id')
-          .eq('id', entryId)
-          .maybeSingle();
-
-        if (!existingEntryError && !existingEntry) {
-          removeEntryFromState(entryId);
-          return { error: null, alreadyCompleted: true };
-        }
+      // Handle any conflict/duplicate error gracefully
+      if (insertError.code === '23505' || insertError.code === '23503' || (insertError as any).status === 409 || isQueueEntryCompletionConflict(insertError)) {
+        removeEntryFromState(entryId);
+        return { error: null, alreadyCompleted: true };
       }
 
       return { error: insertError, alreadyCompleted: false };
