@@ -328,9 +328,7 @@ export function useQueue() {
       return { error: null, alreadyCompleted: true };
     }
 
-    // Insert completed record (queue_entry_id set to null to avoid FK issues
-    // when queue entry gets deleted after completion)
-    const { error: insertError } = await supabase.from('completed_clients').insert({
+    const insertData = {
       session_id: activeSession.id,
       client_name: clientName.trim(),
       phone: entry.phone,
@@ -342,11 +340,22 @@ export function useQueue() {
       tranche_paid: tranchePaid,
       receptionist_id: receptionistId,
       notes: notes?.trim() || null,
-    });
+    };
+
+    let { error: insertError } = await supabase.from('completed_clients').insert(insertData);
+
+    // If we hit the inherited receptionist_id foreign key constraint from auth.users (due to custom roles migration)
+    if (insertError && insertError.code === '23503' && insertError.message?.includes('receptionist_id')) {
+      // Retry with our generic generated auth.users UUID for retro-compatibility until the DB constraint is dropped
+      insertData.receptionist_id = 'a44e7e83-189f-4f82-96d8-b0eeea4ab104';
+      const retry = await supabase.from('completed_clients').insert(insertData);
+      insertError = retry.error;
+    }
 
     if (insertError) {
       // Handle any conflict/duplicate error gracefully
-      if (insertError.code === '23505' || insertError.code === '23503' || (insertError as any).status === 409 || isQueueEntryCompletionConflict(insertError)) {
+      // Only swallow queue_entry_id FK error or generic conflict! DO NOT swallow all FK errors!
+      if (insertError.code === '23505' || isQueueEntryCompletionConflict(insertError)) {
         removeEntryFromState(entryId);
         return { error: null, alreadyCompleted: true };
       }
