@@ -1086,11 +1086,11 @@ const Accueil = () => {
 
       {/* Complete Client Modal */}
       <Dialog open={showCompleteModal} onOpenChange={setShowCompleteModal}>
-        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md">
+        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Finaliser · {selectedEntry?.client_id}</DialogTitle>
           </DialogHeader>
-          <div className="max-h-[60vh] overflow-y-auto pr-1">
+          <div className="max-h-[60vh] overflow-y-auto p-1 -m-1 scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
             <div className="space-y-3 sm:space-y-4 pb-2">
               <Input
                 placeholder="Nom du client"
@@ -1111,7 +1111,7 @@ const Accueil = () => {
                   className="h-11 sm:h-12"
                 />
                 {showTreatmentSuggestions && (
-                  <div className="absolute left-0 right-0 mt-1 bg-card border rounded-lg overflow-hidden shadow-lg max-h-40 overflow-auto z-50">
+                  <div className="absolute left-0 right-0 mt-1 bg-card border rounded-lg overflow-hidden shadow-lg max-h-40 overflow-y-auto z-50 scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
                     {treatmentsList
                       .filter(t => {
                         const q = treatment.trim().toLowerCase();
