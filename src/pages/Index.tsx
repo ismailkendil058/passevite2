@@ -60,7 +60,7 @@ const Index = () => {
       </div>
 
       <p
-        className="mt-12 text-[10px] text-muted-foreground/50 uppercase tracking-[0.2em] relative z-10 animate-fade-in"
+        className="mt-12 text-[8px] sm:text-[10px] text-muted-foreground/50 uppercase tracking-widest sm:tracking-[0.2em] relative z-10 animate-fade-in text-center px-4"
         style={{ animationDelay: '1s' }}
       >
         &copy; {new Date().getFullYear()} Le soin qui passe vite &bull; Excellence en Soins
