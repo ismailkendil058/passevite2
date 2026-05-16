@@ -72,6 +72,7 @@ const Rendezvous = () => {
     const [doctors, setDoctors] = useState<Doctor[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
+    const [paymentFilter, setPaymentFilter] = useState<'all' | 'paid' | 'unpaid'>('all');
     const [selectedClient, setSelectedClient] = useState<{ phone: string, name: string } | null>(null);
     const [selectedDoctorMobile, setSelectedDoctorMobile] = useState<string>('all');
     const [viewingPatient, setViewingPatient] = useState<{ phone: string; name: string } | null>(null);
@@ -445,6 +446,19 @@ const Rendezvous = () => {
         return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
     }, [uniqueClients]);
 
+    const filteredGroupedPatients = useMemo(() => {
+        if (paymentFilter === 'all') return groupedPatients;
+
+        return groupedPatients.filter(patient => {
+            const allTreatmentsPaid = patient.treatments.length > 0 && patient.treatments.every(t => t.totalPaid >= t.latest.total_amount);
+            const hasUnpaidTreatment = patient.treatments.some(t => t.totalPaid < t.latest.total_amount);
+
+            if (paymentFilter === 'paid') return allTreatmentsPaid;
+            if (paymentFilter === 'unpaid') return hasUnpaidTreatment;
+            return true;
+        });
+    }, [groupedPatients, paymentFilter]);
+
     const filteredClients = uniqueClients; // keep for other uses
 
     const parsedAppointments = useMemo(() => {
@@ -815,17 +829,49 @@ const Rendezvous = () => {
                                 )}
                             </div>
 
+                            <div className="flex flex-wrap gap-2 py-1">
+                                <Button
+                                    variant={paymentFilter === 'all' ? 'default' : 'outline'}
+                                    size="sm"
+                                    onClick={() => setPaymentFilter('all')}
+                                    className="rounded-full px-4 h-8 text-[11px] font-bold uppercase tracking-wider transition-all"
+                                >
+                                    Tous
+                                </Button>
+                                <Button
+                                    variant={paymentFilter === 'paid' ? 'default' : 'outline'}
+                                    size="sm"
+                                    onClick={() => setPaymentFilter('paid')}
+                                    className={`rounded-full px-4 h-8 text-[11px] font-bold uppercase tracking-wider transition-all ${paymentFilter === 'paid' ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'text-emerald-600 border-emerald-200 hover:bg-emerald-50'}`}
+                                >
+                                    Totalement Payés
+                                </Button>
+                                <Button
+                                    variant={paymentFilter === 'unpaid' ? 'default' : 'outline'}
+                                    size="sm"
+                                    onClick={() => setPaymentFilter('unpaid')}
+                                    className={`rounded-full px-4 h-8 text-[11px] font-bold uppercase tracking-wider transition-all ${paymentFilter === 'unpaid' ? 'bg-rose-600 hover:bg-rose-700 text-white' : 'text-rose-600 border-rose-200 hover:bg-rose-50'}`}
+                                >
+                                    Dettes
+                                </Button>
+                            </div>
+
                             <div className="grid gap-2">
                                 {loading ? (
                                     <p className="text-center py-10 text-muted-foreground">Chargement...</p>
-                                ) : groupedPatients.length === 0 ? (
-                                    <p className="text-center py-10 text-muted-foreground">Aucun patient trouvé</p>
+                                ) : filteredGroupedPatients.length === 0 ? (
+                                    <p className="text-center py-10 text-muted-foreground">Aucun patient trouvé {paymentFilter !== 'all' ? 'avec ce filtre' : ''}</p>
                                 ) : (
-                                    groupedPatients.map(patient => (
+                                    filteredGroupedPatients.map(patient => (
                                         <Card key={`${patient.phone}_${patient.name}`} onClick={() => { setViewingPatient({ phone: patient.phone, name: patient.name }); setSelectedTreatment(null); }} className="cursor-pointer hover:border-primary/30 hover:bg-primary/[0.02] transition-all group">
                                             <CardContent className="p-4 flex items-center justify-between">
                                                 <div className="space-y-1">
-                                                    <p className="font-bold text-foreground group-hover:text-primary transition-colors">{patient.name}</p>
+                                                    <div className="flex items-center gap-2">
+                                                        <p className="font-bold text-foreground group-hover:text-primary transition-colors">{patient.name}</p>
+                                                        {patient.treatments.some(t => t.totalPaid < t.latest.total_amount) && (
+                                                            <Badge variant="outline" className="bg-rose-50 text-rose-600 border-rose-100 text-[9px] h-4 px-1.5 font-bold uppercase">Dette</Badge>
+                                                        )}
+                                                    </div>
                                                     <p className="text-xs text-muted-foreground">{patient.phone} · <span className="text-primary/70">{patient.treatments.map(t => t.treatment).slice(0, 2).join(', ')}</span></p>
                                                 </div>
                                                 <div className="flex items-center gap-3">
