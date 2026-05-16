@@ -80,6 +80,9 @@ const Rendezvous = () => {
     const [isScheduleOpen, setIsScheduleOpen] = useState(false);
     const [viewingClient, setViewingClient] = useState<CompletedClient | null>(null);
     const [viewingNote, setViewingNote] = useState<string | null>(null);
+    const [isPaymentOpen, setIsPaymentOpen] = useState(false);
+    const [quickPaymentAmount, setQuickPaymentAmount] = useState<number>(0);
+    const [quickPaymentNote, setQuickPaymentNote] = useState<string>('');
 
 
     // Form state for new appointment
@@ -237,6 +240,44 @@ const Rendezvous = () => {
             toast.success('Enregistré avec succès');
         } catch (error) {
             console.error('Error saving visit/appt:', error);
+            toast.error('Erreur lors de l\'enregistrement');
+        }
+    };
+
+    const handleQuickPayment = async (latestEntry: CompletedClient) => {
+        if (quickPaymentAmount <= 0) {
+            toast.error('Le montant doit être supérieur à 0');
+            return;
+        }
+
+        try {
+            const paymentData = {
+                client_name: latestEntry.client_name,
+                phone: latestEntry.phone,
+                treatment: latestEntry.treatment,
+                total_amount: latestEntry.total_amount,
+                tranche_paid: Number(quickPaymentAmount),
+                doctor_id: latestEntry.doctor_id,
+                notes: quickPaymentNote || 'Versement sans visite',
+                completed_at: new Date().toISOString(),
+                state: latestEntry.state,
+                receptionist_id: user?.id,
+                session_id: activeSessionId,
+                client_id: latestEntry.client_id
+            };
+
+            const { error } = await supabase.from('completed_clients').insert(paymentData);
+            if (error) throw error;
+
+            toast.success('Versement enregistré avec succès');
+            setIsPaymentOpen(false);
+            setQuickPaymentAmount(0);
+            setQuickPaymentNote('');
+
+            fetchInitialData();
+            fetchClients();
+        } catch (error) {
+            console.error('Error saving quick payment:', error);
             toast.error('Erreur lors de l\'enregistrement');
         }
     };
@@ -998,11 +1039,54 @@ const Rendezvous = () => {
                                                             <p className="text-[10px] uppercase font-bold text-emerald-600">Total payé pour ce traitement</p>
                                                             <p className="text-2xl font-black text-emerald-700">{totalPaidForChosen.toLocaleString()} DZD</p>
                                                         </div>
+                                                        <Button
+                                                            variant="default"
+                                                            size="sm"
+                                                            className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-full h-10 px-6 gap-2 shadow-lg shadow-emerald-200 font-bold uppercase text-[11px] tracking-wider"
+                                                            onClick={() => setIsPaymentOpen(true)}
+                                                        >
+                                                            <Plus className="h-4 w-4" /> Verser
+                                                        </Button>
                                                         <div className="text-right">
                                                             <p className="text-[10px] uppercase font-bold text-emerald-600">Montant total</p>
                                                             <p className="text-lg font-bold text-emerald-800">{latestTotalForChosen.toLocaleString()} DZD</p>
                                                         </div>
                                                     </div>
+
+                                                    <Dialog open={isPaymentOpen} onOpenChange={setIsPaymentOpen}>
+                                                        <DialogContent className="max-w-md w-[95vw] rounded-2xl p-0 overflow-hidden">
+                                                            <DialogHeader className="p-6 pb-2">
+                                                                <DialogTitle className="text-xl font-bold italic text-primary">Nouveau Versement</DialogTitle>
+                                                                <DialogDescription>Enregistrer un paiement pour {chosen}</DialogDescription>
+                                                            </DialogHeader>
+                                                            <div className="p-6 space-y-4">
+                                                                <div className="space-y-2">
+                                                                    <label className="text-[10px] uppercase font-black text-muted-foreground">Montant (DZD)</label>
+                                                                    <Input
+                                                                        type="number"
+                                                                        placeholder="0.00"
+                                                                        value={quickPaymentAmount || ''}
+                                                                        onChange={e => setQuickPaymentAmount(Number(e.target.value))}
+                                                                        className="h-12 text-lg font-bold"
+                                                                    />
+                                                                </div>
+                                                                <div className="space-y-2">
+                                                                    <label className="text-[10px] uppercase font-black text-muted-foreground">Note (Optionnel)</label>
+                                                                    <Input
+                                                                        placeholder="Ex: Versement bureau, reste ..."
+                                                                        value={quickPaymentNote}
+                                                                        onChange={e => setQuickPaymentNote(e.target.value)}
+                                                                    />
+                                                                </div>
+                                                                <Button
+                                                                    className="w-full h-12 rounded-xl text-md font-bold bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-200"
+                                                                    onClick={() => entriesForChosen[0] && handleQuickPayment(entriesForChosen[0])}
+                                                                >
+                                                                    Confirmer le Paiement
+                                                                </Button>
+                                                            </div>
+                                                        </DialogContent>
+                                                    </Dialog>
 
                                                     <div className="space-y-4">
                                                         <h4 className="text-xs font-black text-muted-foreground uppercase tracking-widest flex items-center gap-2">
