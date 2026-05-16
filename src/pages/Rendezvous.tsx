@@ -78,6 +78,8 @@ const Rendezvous = () => {
     const [selectedTreatment, setSelectedTreatment] = useState<string | null>(null);
     const [isScheduleOpen, setIsScheduleOpen] = useState(false);
     const [viewingClient, setViewingClient] = useState<CompletedClient | null>(null);
+    const [viewingNote, setViewingNote] = useState<string | null>(null);
+
 
     // Form state for new appointment
     const [newApptDate, setNewApptDate] = useState<Date | undefined>(new Date());
@@ -923,7 +925,7 @@ const Rendezvous = () => {
                                                                         <TableRow key={h.id}>
                                                                             <TableCell className="text-xs py-2">{format(parseISO(h.completed_at), 'dd/MM/yy')}</TableCell>
                                                                             <TableCell className="text-xs py-2"><div>{h.treatment}</div></TableCell>
-                                                                            <TableCell className="text-xs py-2 text-slate-500 max-w-[150px] truncate" title={h.notes}>{h.notes || '-'}</TableCell>
+                                                                            <TableCell className="text-xs py-2 text-slate-500 max-w-[150px] truncate cursor-pointer hover:text-primary transition-all font-medium italic underline decoration-dotted underline-offset-2" onClick={() => h.notes && setViewingNote(h.notes)}>{h.notes || '-'}</TableCell>
                                                                             <TableCell className="text-xs py-2 text-right font-medium">{h.total_amount?.toLocaleString()}</TableCell>
                                                                             <TableCell className="text-xs py-2 text-right text-emerald-600 font-bold">{h.tranche_paid?.toLocaleString()}</TableCell>
                                                                             {['manager', 'admin'].includes(userRole || '') && (
@@ -1530,6 +1532,27 @@ const Rendezvous = () => {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            <Dialog open={!!viewingNote} onOpenChange={(open) => !open && setViewingNote(null)}>
+                <DialogContent className="max-w-sm w-[90vw] rounded-2xl p-6 shadow-2xl border-none">
+                    <DialogHeader className="pb-4 border-b border-border/10">
+                        <DialogTitle className="text-xl font-bold italic text-primary flex items-center gap-2">
+                            <MessageSquare className="h-5 w-5" /> Note Complète
+                        </DialogTitle>
+                    </DialogHeader>
+                    <div className="py-6">
+                        <div className="p-4 bg-muted/40 rounded-2xl border border-border/50 shadow-inner">
+                            <p className="text-sm leading-relaxed text-foreground whitespace-pre-wrap font-medium">{viewingNote}</p>
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button onClick={() => setViewingNote(null)} className="w-full h-11 rounded-xl font-bold shadow-premium">
+                            Fermer
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
 
             <footer className="p-4 border-t bg-muted/20 text-center">
                 <p className="text-[10px] text-muted-foreground uppercase tracking-widest">&copy; PasseVite - Gestion Holistique des Soins</p>

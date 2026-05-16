@@ -65,6 +65,8 @@ const MedecinDashboard = () => {
     // SELECTED PATIENT FOR FICHE MALADE
     const [selectedPatient, setSelectedPatient] = useState<any>(null);
     const [isPatientDialogOpen, setIsPatientDialogOpen] = useState(false);
+    const [viewingNote, setViewingNote] = useState<string | null>(null);
+
 
     // Fetch Patient History (Appointments & Ordonnances)
     const { data: patientHistory, isLoading: isLoadingHistory } = useQuery({
@@ -605,7 +607,7 @@ const MedecinDashboard = () => {
                                                                 <TableCell className="text-xs py-3 text-slate-700 text-center">
                                                                     <div>{h.treatment || '-'}</div>
                                                                 </TableCell>
-                                                                <TableCell className="text-xs py-3 text-slate-500 max-w-[150px] truncate text-center mx-auto" title={h.notes}>{h.notes || '-'}</TableCell>
+                                                                <TableCell className="text-xs py-3 text-slate-500 max-w-[150px] truncate text-center mx-auto cursor-pointer hover:text-primary transition-all font-medium italic underline decoration-dotted underline-offset-2" onClick={() => h.notes && setViewingNote(h.notes)}>{h.notes || '-'}</TableCell>
                                                                 <TableCell className="text-xs py-3 font-bold text-slate-800 text-center">{h.total_amount?.toLocaleString() || 0}</TableCell>
                                                                 <TableCell className="text-xs py-3 font-bold text-emerald-600 text-center">{h.tranche_paid?.toLocaleString() || 0}</TableCell>
                                                             </TableRow>
@@ -627,6 +629,27 @@ const MedecinDashboard = () => {
                     )}
                 </DialogContent>
             </Dialog>
+
+            <Dialog open={!!viewingNote} onOpenChange={(open) => !open && setViewingNote(null)}>
+                <DialogContent className="max-w-sm w-[90vw] rounded-2xl p-6 shadow-2xl border-none">
+                    <DialogHeader className="pb-4 border-b border-border/10">
+                        <DialogTitle className="text-xl font-bold italic text-primary flex items-center gap-2">
+                            <MessageSquare className="h-5 w-5" /> Note Complète
+                        </DialogTitle>
+                    </DialogHeader>
+                    <div className="py-6">
+                        <div className="p-4 bg-muted/40 rounded-2xl border border-border/50 shadow-inner">
+                            <p className="text-sm leading-relaxed text-foreground whitespace-pre-wrap font-medium">{viewingNote}</p>
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button onClick={() => setViewingNote(null)} className="w-full h-11 rounded-xl font-bold shadow-premium">
+                            Fermer
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
 
             <footer className="p-4 border-t bg-muted/20 text-center">
                 <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-medium">&copy; PasseVite - Gestion Holistique des Soins</p>
