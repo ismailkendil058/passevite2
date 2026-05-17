@@ -951,6 +951,9 @@ const Rendezvous = () => {
                                                             <p className="text-sm font-medium text-primary">{viewingPatient.phone}</p>
                                                         </div>
                                                         <div className="flex flex-col sm:flex-row gap-2">
+                                                            <Button variant="default" size="sm" className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => setIsPaymentOpen(true)}>
+                                                                <Plus className="h-4 w-4" /> Verser
+                                                            </Button>
                                                             <Button variant="default" size="sm" className="gap-2" onClick={() => {
                                                                 setSelectedClient({ phone: viewingPatient.phone, name: viewingPatient.name });
                                                                 setIsScheduleOpen(true);
@@ -1039,14 +1042,6 @@ const Rendezvous = () => {
                                                             <p className="text-[10px] uppercase font-bold text-emerald-600">Total payé pour ce traitement</p>
                                                             <p className="text-2xl font-black text-emerald-700">{totalPaidForChosen.toLocaleString()} DZD</p>
                                                         </div>
-                                                        <Button
-                                                            variant="default"
-                                                            size="sm"
-                                                            className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-full h-10 px-6 gap-2 shadow-lg shadow-emerald-200 font-bold uppercase text-[11px] tracking-wider"
-                                                            onClick={() => setIsPaymentOpen(true)}
-                                                        >
-                                                            <Plus className="h-4 w-4" /> Verser
-                                                        </Button>
                                                         <div className="text-right">
                                                             <p className="text-[10px] uppercase font-bold text-emerald-600">Montant total</p>
                                                             <p className="text-lg font-bold text-emerald-800">{latestTotalForChosen.toLocaleString()} DZD</p>
