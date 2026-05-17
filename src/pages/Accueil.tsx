@@ -11,7 +11,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Phone, Plus, LogOut, ChevronRight, ChevronLeft, Users, Clock, CheckCircle, XCircle, MessageCircle, Pencil, Trash2, UserCheck, Calendar as CalendarIcon, DollarSign, ShoppingCart, Sparkles, Lock, Unlock } from 'lucide-react';
+import { Phone, Plus, LogOut, ChevronRight, ChevronLeft, Users, Clock, CheckCircle, XCircle, MessageCircle, Pencil, Trash2, UserCheck, Calendar as CalendarIcon, DollarSign, ShoppingCart, Sparkles, Lock, Unlock, QrCode } from 'lucide-react';
+import QrScannerModal from '@/components/QrScannerModal';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -209,6 +210,8 @@ const Accueil = () => {
   // Channel Choice Modal
   const [showChannelChoice, setShowChannelChoice] = useState(false);
   const [lastCompletedPatient, setLastCompletedPatient] = useState<{ name: string; phone: string; treatment: string } | null>(null);
+  // QR Scanner
+  const [showQrScanner, setShowQrScanner] = useState(false);
 
   const doctorsScrollRef = useRef<HTMLDivElement>(null);
 
@@ -969,7 +972,16 @@ const Accueil = () => {
       </div>
 
       {/* FAB to add client */}
-      <div className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6">
+      <div className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 flex flex-col gap-2 items-end">
+        <Button
+          size="lg"
+          variant="outline"
+          className="h-12 w-12 sm:h-14 sm:w-14 rounded-full shadow-lg border-2 border-violet-200 bg-white hover:bg-violet-50 text-violet-600"
+          onClick={() => setShowQrScanner(true)}
+          title="Scanner QR"
+        >
+          <QrCode className="h-5 w-5 sm:h-6 sm:w-6" />
+        </Button>
         <Button
           size="lg"
           className="h-12 w-12 sm:h-14 sm:w-14 rounded-full shadow-lg"
@@ -1398,6 +1410,62 @@ const Accueil = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* QR Scanner Modal */}
+      <QrScannerModal
+        open={showQrScanner}
+        onOpenChange={setShowQrScanner}
+        onScanResult={async (phone, name) => {
+          toast.success('QR code scanné !');
+
+          // Search for the patient in completed_clients
+          const { data: found } = await supabase
+            .from('completed_clients')
+            .select('client_name, phone, doctor_id')
+            .eq('phone', phone)
+            .order('completed_at', { ascending: false })
+            .limit(1);
+
+          if (found && found.length > 0) {
+            const patient = found[0];
+            // Auto-fill and open the add modal
+            setNewPatientName(patient.client_name || name);
+            setNewPhone(patient.phone);
+            setNewState('R');
+            if (patient.doctor_id) setNewDoctorId(patient.doctor_id);
+            toast.success(`Patient trouvé : ${patient.client_name}`);
+          } else {
+            // Patient not found in history, fill with QR data
+            setNewPatientName(name);
+            setNewPhone(phone);
+            setNewState('R');
+            toast('Patient non trouvé dans l\'historique, données QR remplies.', { icon: 'ℹ️' });
+          }
+
+          // Also search for linked appointments
+          const today = new Date();
+          const start = new Date(today.setHours(0, 0, 0, 0)).toISOString();
+          const { data: appts } = await supabase
+            .from('appointments')
+            .select('id, client_name, client_phone, doctor_id, appointment_at, status')
+            .neq('status', 'attended')
+            .neq('status', 'denied')
+            .eq('client_phone', phone)
+            .gte('appointment_at', start)
+            .order('appointment_at', { ascending: true })
+            .limit(1);
+
+          if (appts && appts.length > 0) {
+            const appt = appts[0];
+            setNewPatientName(appt.client_name);
+            setNewDoctorId(appt.doctor_id);
+            setLinkedAppointmentId(appt.id);
+            toast.success('Rendez-vous lié automatiquement !');
+          }
+
+          setShowAddModal(true);
+        }}
+      />
     </div>
   );
 };

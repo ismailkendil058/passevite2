@@ -15,8 +15,9 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
     LogOut, Search, MessageSquare, Calendar as CalendarIcon,
-    Users, CheckCircle2, XCircle, Clock, History, Plus, Phone, Trash2, Pencil
+    Users, CheckCircle2, XCircle, Clock, History, Plus, Phone, Trash2, Pencil, QrCode
 } from 'lucide-react';
+import QrStickerModal from '@/components/QrStickerModal';
 import { format, addHours, isWithinInterval, startOfDay, endOfDay, parseISO, startOfToday, endOfToday } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -83,6 +84,7 @@ const Rendezvous = () => {
     const [isPaymentOpen, setIsPaymentOpen] = useState(false);
     const [quickPaymentAmount, setQuickPaymentAmount] = useState<number>(0);
     const [quickPaymentNote, setQuickPaymentNote] = useState<string>('');
+    const [isQrStickerOpen, setIsQrStickerOpen] = useState(false);
 
 
     // Form state for new appointment
@@ -941,7 +943,12 @@ const Rendezvous = () => {
                                         return (
                                             <>
                                                 <DialogHeader className="p-6 pb-2">
-                                                    <DialogTitle className="text-2xl font-black italic text-primary">Dossier Patient</DialogTitle>
+                                                    <div className="flex items-center justify-between">
+                                                        <DialogTitle className="text-2xl font-black italic text-primary">Dossier Patient</DialogTitle>
+                                                        <Button variant="outline" size="icon" className="h-8 w-8 border-violet-200 text-violet-600 hover:bg-violet-50 mr-6" onClick={() => setIsQrStickerOpen(true)}>
+                                                            <QrCode className="h-4 w-4" />
+                                                        </Button>
+                                                    </div>
                                                 </DialogHeader>
 
                                                 <div className="p-6 pt-0 flex-1 overflow-y-auto space-y-6">
@@ -951,15 +958,13 @@ const Rendezvous = () => {
                                                             <p className="text-sm font-medium text-primary">{viewingPatient.phone}</p>
                                                         </div>
                                                         <div className="flex flex-col sm:flex-row gap-2">
-                                                            <Button variant="default" size="sm" className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => setIsPaymentOpen(true)}>
-                                                                <Plus className="h-4 w-4" /> Verser
-                                                            </Button>
                                                             <Button variant="default" size="sm" className="gap-2" onClick={() => {
                                                                 setSelectedClient({ phone: viewingPatient.phone, name: viewingPatient.name });
                                                                 setIsScheduleOpen(true);
                                                             }}>
                                                                 <Plus className="h-4 w-4" /> Nouveau RDV
                                                             </Button>
+
                                                             {['manager', 'admin'].includes(userRole || '') && (
                                                                 <Button variant="outline" size="sm" className="gap-2" onClick={() => {
                                                                     setBaseInfo({
@@ -1037,14 +1042,19 @@ const Rendezvous = () => {
                                                         </div>
                                                     </div>
 
-                                                    <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100 flex justify-between items-center">
+                                                    <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
                                                         <div>
                                                             <p className="text-[10px] uppercase font-bold text-emerald-600">Total payé pour ce traitement</p>
                                                             <p className="text-2xl font-black text-emerald-700">{totalPaidForChosen.toLocaleString()} DZD</p>
                                                         </div>
-                                                        <div className="text-right">
-                                                            <p className="text-[10px] uppercase font-bold text-emerald-600">Montant total</p>
-                                                            <p className="text-lg font-bold text-emerald-800">{latestTotalForChosen.toLocaleString()} DZD</p>
+                                                        <div className="flex items-center justify-between sm:justify-end gap-4 w-full sm:w-auto mt-2 sm:mt-0 pt-3 sm:pt-0 border-t border-emerald-100 sm:border-0">
+                                                            <div className="text-left sm:text-right">
+                                                                <p className="text-[10px] uppercase font-bold text-emerald-600">Montant total</p>
+                                                                <p className="text-lg font-bold text-emerald-800">{latestTotalForChosen.toLocaleString()} DZD</p>
+                                                            </div>
+                                                            <Button variant="default" size="sm" className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-200 shrink-0" onClick={() => setIsPaymentOpen(true)}>
+                                                                <Plus className="h-4 w-4" /> Verser
+                                                            </Button>
                                                         </div>
                                                     </div>
 
@@ -1104,6 +1114,13 @@ const Rendezvous = () => {
                                                         </div>
                                                     </div>
                                                 </div>
+
+                                                <QrStickerModal
+                                                    open={isQrStickerOpen}
+                                                    onOpenChange={setIsQrStickerOpen}
+                                                    patientName={viewingPatient.name}
+                                                    patientPhone={viewingPatient.phone}
+                                                />
                                             </>
                                         );
                                     })()}
