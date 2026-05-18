@@ -493,8 +493,15 @@ const Accueil = () => {
       }
 
       if (alreadyCompleted) {
-        toast.success('Ce patient a deja ete traite');
+        toast.info('Ce patient était déjà traité');
+        // Still proceed to show choice modal in case it was a double-click/retry
+        setLastCompletedPatient({
+          name: clientName,
+          phone: selectedEntry.phone,
+          treatment: treatment
+        });
         setShowCompleteModal(false);
+        setShowChannelChoice(true);
         return;
       }
       if (hasNextAppt && nextApptDate) {

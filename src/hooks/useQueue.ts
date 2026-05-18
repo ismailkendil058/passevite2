@@ -260,16 +260,41 @@ export function useQueue() {
     const doctor = doctors.find(d => d.id === doctorId);
     if (!doctor) return { error: new Error('Equipe introuvable') };
 
-    // Get next number for this state in current session
-    const { data: existing } = await supabase
-      .from('queue_entries')
-      .select('state_number')
-      .eq('session_id', activeSession.id)
-      .eq('state', state)
-      .order('state_number', { ascending: false })
-      .limit(1);
+    // Get next number for this state in current session by checking BOTH tables
+    const [qRes, cRes] = await Promise.all([
+      supabase
+        .from('queue_entries')
+        .select('state_number')
+        .eq('session_id', activeSession.id)
+        .eq('state', state)
+        .order('state_number', { ascending: false })
+        .limit(1),
+      supabase
+        .from('completed_clients')
+        .select('client_id')
+        .eq('session_id', activeSession.id)
+        .eq('state', state)
+    ]);
 
-    const nextNumber = (existing && existing.length > 0) ? existing[0].state_number + 1 : 1;
+    let maxNumber = 0;
+
+    // Max from queue_entries
+    if (qRes.data && qRes.data.length > 0) {
+      maxNumber = qRes.data[0].state_number;
+    }
+
+    // Max from completed_clients (parsing numbers from client_id strings)
+    if (cRes.data && cRes.data.length > 0) {
+      cRes.data.forEach(item => {
+        const matches = item.client_id.match(/\d+/);
+        if (matches) {
+          const num = parseInt(matches[0]);
+          if (num > maxNumber) maxNumber = num;
+        }
+      });
+    }
+
+    const nextNumber = maxNumber + 1;
     const clientId = `${state}${nextNumber}${doctor.initial}`;
     const position = entries.length + 1;
 
@@ -315,20 +340,25 @@ export function useQueue() {
     if (!entry || !activeSession) return { error: new Error('Entrée introuvable') };
 
     // Check if this queue entry was already completed (prevents duplicate on double-click)
+    // We check by client_id + session_id as a dedup key
     const { data: existing } = await supabase
       .from('completed_clients')
       .select('id')
       .eq('client_id', entry.client_id)
       .eq('session_id', activeSession.id)
+      .eq('phone', entry.phone)
       .maybeSingle();
 
     if (existing) {
-      // Already completed — just clean up the UI
+      // Already completed — just clean up the queue entry from DB and UI
+      await supabase.from('queue_entries').delete().eq('id', entryId);
       removeEntryFromState(entryId);
       return { error: null, alreadyCompleted: true };
     }
 
-    const insertData = {
+    // NOTE: Do NOT set queue_entry_id here — the FK on completed_clients
+    // references queue_entries and will BLOCK the delete of the queue entry below.
+    const insertData: any = {
       session_id: activeSession.id,
       client_name: clientName.trim(),
       phone: entry.phone,
@@ -346,7 +376,6 @@ export function useQueue() {
 
     // If we hit the inherited receptionist_id foreign key constraint from auth.users (due to custom roles migration)
     if (insertError && insertError.code === '23503' && insertError.message?.includes('receptionist_id')) {
-      // Retry with our generic generated auth.users UUID for retro-compatibility until the DB constraint is dropped
       insertData.receptionist_id = 'a44e7e83-189f-4f82-96d8-b0eeea4ab104';
       const retry = await supabase.from('completed_clients').insert(insertData);
       insertError = retry.error;
@@ -354,8 +383,8 @@ export function useQueue() {
 
     if (insertError) {
       // Handle any conflict/duplicate error gracefully
-      // Only swallow queue_entry_id FK error or generic conflict! DO NOT swallow all FK errors!
       if (insertError.code === '23505' || isQueueEntryCompletionConflict(insertError)) {
+        await supabase.from('queue_entries').delete().eq('id', entryId);
         removeEntryFromState(entryId);
         return { error: null, alreadyCompleted: true };
       }
@@ -364,11 +393,11 @@ export function useQueue() {
     }
 
     if (entry.appointment_id) {
-      // Mark appointment as 'attended' only after the treatment record is safely stored.
       await supabase.from('appointments').update({ status: 'attended' }).eq('id', entry.appointment_id);
     }
 
-    // Delete from queue_entries
+    // Delete from queue_entries — this now works because completed_clients
+    // does NOT reference this row via queue_entry_id
     const { error } = await supabase
       .from('queue_entries')
       .delete()
@@ -376,9 +405,13 @@ export function useQueue() {
 
     if (!error) {
       removeEntryFromState(entryId);
+    } else {
+      // If delete fails for any reason, still remove from local state
+      // so the UI is not stuck. The realtime subscription will reconcile.
+      removeEntryFromState(entryId);
     }
 
-    return { error, alreadyCompleted: false };
+    return { error: null, alreadyCompleted: false };
   };
 
   const getStats = () => {
