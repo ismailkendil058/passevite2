@@ -18,6 +18,7 @@ import {
     Users, CheckCircle2, XCircle, Clock, History, Plus, Phone, Trash2, Pencil, QrCode
 } from 'lucide-react';
 import QrStickerModal from '@/components/QrStickerModal';
+import QrScannerModal from '@/components/QrScannerModal';
 import { format, addHours, isWithinInterval, startOfDay, endOfDay, parseISO, startOfToday, endOfToday } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -85,6 +86,7 @@ const Rendezvous = () => {
     const [quickPaymentAmount, setQuickPaymentAmount] = useState<number>(0);
     const [quickPaymentNote, setQuickPaymentNote] = useState<string>('');
     const [isQrStickerOpen, setIsQrStickerOpen] = useState(false);
+    const [showQrScanner, setShowQrScanner] = useState(false);
 
 
     // Form state for new appointment
@@ -841,8 +843,16 @@ const Rendezvous = () => {
                                         placeholder="Rechercher un patient (nom ou téléphone)..."
                                         value={searchQuery}
                                         onChange={(e) => setSearchQuery(e.target.value)}
-                                        className="pl-10 h-12 rounded-xl"
+                                        className="pl-10 pr-12 h-12 rounded-xl"
                                     />
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 text-primary hover:bg-primary/10"
+                                        onClick={() => setShowQrScanner(true)}
+                                    >
+                                        <QrCode className="h-5 w-5" />
+                                    </Button>
                                 </div>
                                 {['manager', 'admin', 'receptionist'].includes(userRole || '') && (
                                     <Button
@@ -1694,6 +1704,17 @@ const Rendezvous = () => {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            <QrScannerModal
+                open={showQrScanner}
+                onOpenChange={setShowQrScanner}
+                onScanResult={(phone, name) => {
+                    setViewingPatient({ phone, name });
+                    setSelectedTreatment(null);
+                    setShowQrScanner(false);
+                    toast.success(`Dossier patient ouvert : ${name || phone}`);
+                }}
+            />
 
 
             <footer className="p-4 border-t bg-muted/20 text-center">
