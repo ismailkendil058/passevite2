@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
-import { Monitor, UserCog, Sparkles, Tv, UserCheck, FlaskConical, Globe, Star } from 'lucide-react';
+import { Monitor, UserCog, Sparkles, Tv, UserCheck, FlaskConical, Globe, Star, CreditCard } from 'lucide-react';
 
 const Index = () => {
   const sections = [
@@ -12,6 +12,7 @@ const Index = () => {
     { title: 'Rendez-vous', description: 'Réservations du site web', icon: Sparkles, href: '/appointment/login', variant: 'outline' as const },
     { title: 'Télévision', description: 'Affichage de la file d\'attente', icon: Tv, href: '/tv', variant: 'outline' as const },
     { title: 'Avis Patient', description: 'Formulaire de satisfaction', icon: Star, href: '/review', variant: 'outline' as const },
+    { title: 'E-Carte Patient', description: 'Suivi de soins & paiements', icon: CreditCard, href: '/patient', variant: 'outline' as const },
   ];
 
   return (

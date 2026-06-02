@@ -29,6 +29,7 @@ const LoginMedecin = lazy(() => import("./pages/LoginMedecin"));
 const MedecinDashboard = lazy(() => import("./pages/MedecinDashboard"));
 const UserManager = lazy(() => import("./pages/UserManager"));
 const LaboPage = lazy(() => import("./pages/LaboPage"));
+const PatientCard = lazy(() => import("./pages/PatientCard"));
 
 
 const LoadingScreen = () => (
@@ -127,6 +128,7 @@ const App = () => (
             <Route path="/doctor" element={
               <MedecinDashboard />
             } />
+            <Route path="/patient" element={<PatientCard />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </Suspense>
