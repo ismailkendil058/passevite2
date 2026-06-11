@@ -201,7 +201,11 @@ const TV = () => {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'sessions' }, () => fetchQueue())
       .subscribe();
 
+    // Polling fallback: refresh every 5 seconds
+    const pollInterval = setInterval(() => fetchQueue(), 5000);
+
     return () => {
+      clearInterval(pollInterval);
       supabase.removeChannel(channel);
       if (announcementTimer.current) clearTimeout(announcementTimer.current);
       window.speechSynthesis?.cancel();

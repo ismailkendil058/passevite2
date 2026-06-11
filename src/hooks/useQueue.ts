@@ -100,20 +100,7 @@ export function useQueue() {
       if (a.state !== 'U' && b.state === 'U') return 1;
       if (a.state === 'U' && b.state === 'U') return a.state_number - b.state_number;
 
-      // 2. For N (New) and R (Appointment), alternate: N1, R1, N2, R2, ...
-      const getRank = (e: QueueEntry) => {
-        const num = e.state_number || 0;
-        if (e.state === 'N') return num * 2 - 1; // N1->1, N2->3, N3->5
-        if (e.state === 'R') return num * 2;     // R1->2, R2->4, R3->6
-        return 999;
-      };
-
-      const rankA = getRank(a);
-      const rankB = getRank(b);
-
-      if (rankA !== rankB) return rankA - rankB;
-
-      // Secondary sort for items with same rank (different doctors) or unknown states
+      // 2. For N (Nouveau) and R (Rendez-vous), sort strictly chronologically by arrival time
       return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
     });
   };
@@ -186,8 +173,15 @@ export function useQueue() {
       )
       .subscribe();
 
+    // Polling fallback: refresh every 5 seconds in case realtime misses an event
+    const pollInterval = setInterval(() => {
+      fetchEntries(activeSession.id);
+      fetchInCabinetEntries(activeSession.id);
+    }, 5000);
+
     return () => {
       clearTimeout(timeoutId);
+      clearInterval(pollInterval);
       supabase.removeChannel(channel);
     };
   }, [activeSession?.id, fetchEntries, fetchInCabinetEntries]);
@@ -207,7 +201,15 @@ export function useQueue() {
       )
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    // Polling fallback for session changes every 5 seconds
+    const pollInterval = setInterval(() => {
+      fetchActiveSession();
+    }, 5000);
+
+    return () => {
+      clearInterval(pollInterval);
+      supabase.removeChannel(channel);
+    };
   }, [fetchActiveSession]);
 
   const openSession = async (userId: string) => {
@@ -254,6 +256,20 @@ export function useQueue() {
     return { error };
   };
 
+  // Return client to waiting queue from in_cabinet
+  const returnToQueue = async (entryId: string) => {
+    const { error } = await supabase
+      .from('queue_entries')
+      .update({ status: 'waiting' })
+      .eq('id', entryId);
+
+    if (!error && activeSession) {
+      fetchEntries(activeSession.id);
+      fetchInCabinetEntries(activeSession.id);
+    }
+    return { error };
+  };
+
   const addClient = async (phone: string, state: 'U' | 'N' | 'R', doctorId: string, patientName?: string, appointmentId?: string) => {
     if (!activeSession) return { error: new Error('Aucune séance active') };
 
@@ -289,7 +305,8 @@ export function useQueue() {
         const matches = item.client_id.match(/\d+/);
         if (matches) {
           const num = parseInt(matches[0]);
-          if (num > maxNumber) maxNumber = num;
+          // Ignore anomalous large numbers (like timestamps) that exceed postgres integer limits
+          if (num > maxNumber && num < 1000000) maxNumber = num;
         }
       });
     }
@@ -313,6 +330,16 @@ export function useQueue() {
       })
       .select('*, doctor:doctors(*)')
       .single();
+
+    if (error) {
+      console.error("=======================");
+      console.error("EXACT DATABASE ERROR:");
+      console.error("Code:", error.code);
+      console.error("Message:", error.message);
+      console.error("Details:", error.details);
+      console.error("Hint:", error.hint);
+      console.error("=======================");
+    }
 
     if (appointmentId) {
       // Mark appointment as 'coming'
@@ -488,5 +515,6 @@ export function useQueue() {
     deleteClient,
     updateCompletedClient,
     deleteCompletedClient,
+    returnToQueue,
   };
 }

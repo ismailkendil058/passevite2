@@ -72,13 +72,6 @@ const QueueItem = React.memo(({ entry, index, onEdit, onDelete, onNext }: { entr
             <a href={`tel:${entry.phone}`} className="text-primary flex items-center justify-center p-1.5 hover:bg-secondary/50 rounded-full transition-colors" title="Appeler">
               <Phone className="h-5 w-5" />
             </a>
-            <a
-              href={`sms:${entry.phone}?body=${encodeURIComponent("Clinique PasseVite : votre tour arrive bientôt.\nVous pouvez suivre le nombre de patients avant vous ici :\nhttps://passevite.vercel.app/client\nدوركم سيأتي قريبًا.")}`}
-              className="text-primary flex items-center justify-center p-1.5 hover:bg-secondary/50 rounded-full transition-colors"
-              title="Envoyer un SMS"
-            >
-              <MessageCircle className="h-5 w-5" />
-            </a>
             <Button
               variant="ghost"
               size="icon"
@@ -128,7 +121,7 @@ const QueueItem = React.memo(({ entry, index, onEdit, onDelete, onNext }: { entr
 
 const Accueil = () => {
   const { user, signOut } = useAuth();
-  const { entries, inCabinetEntries, doctors, loading, addClient, callClient, completeClient, updateClient, deleteClient, updateCompletedClient, deleteCompletedClient } = useQueue();
+  const { entries, inCabinetEntries, doctors, loading, addClient, callClient, completeClient, updateClient, deleteClient, updateCompletedClient, deleteCompletedClient, returnToQueue } = useQueue();
 
   const [isManagerAuthorized, setIsManagerAuthorized] = useState(false);
   const [managerPassword, setManagerPassword] = useState('');
@@ -888,36 +881,16 @@ const Accueil = () => {
 
       {/* Stats by Doctor - carousel with navigation */}
       <div className="relative">
-        <div className="absolute left-0 top-1/2 -translate-y-1/2 z-10 hidden sm:flex">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 bg-background/80 shadow-md rounded-full"
-            onClick={() => scrollDoctors('left')}
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-        </div>
-        <div className="absolute right-0 top-1/2 -translate-y-1/2 z-10 hidden sm:flex">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 bg-background/80 shadow-md rounded-full"
-            onClick={() => scrollDoctors('right')}
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        </div>
         <div
           ref={doctorsScrollRef}
-          className="flex gap-2 p-3 sm:p-4 overflow-x-auto scrollbar-hide snap-x snap-mandatory"
+          className="flex gap-2 p-3 sm:p-4 lg:justify-center overflow-x-auto scrollbar-hide snap-x snap-mandatory"
           style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
         >
           {doctorStats.map(ds => {
             return (
               <Card
                 key={ds.id}
-                className="border-0 shadow-sm shrink-0 w-28 sm:w-40 snap-start cursor-pointer hover:shadow-md transition-shadow"
+                className="border-0 shadow-sm shrink-0 w-40 sm:w-56 snap-start cursor-pointer hover:shadow-md transition-shadow"
                 onClick={() => setDoctorFilter(doctorFilter === ds.id ? 'all' : ds.id)}
               >
                 <CardContent className="p-3 sm:p-4 text-center">
@@ -933,12 +906,12 @@ const Accueil = () => {
 
       {/* In Cabinet Section */}
       {inCabinetEntries.length > 0 && (
-        <div className="p-3 sm:p-4 pb-0">
-          <h2 className="text-sm font-semibold text-muted-foreground mb-2 flex items-center gap-2">
+        <div className="p-3 sm:p-4 pb-0 flex flex-col items-center w-full">
+          <h2 className="text-sm font-semibold text-muted-foreground mb-2 flex items-center justify-center gap-2">
             <UserCheck className="h-4 w-4 text-orange-500" />
             Au cabinet ({inCabinetEntries.length})
           </h2>
-          <div className="flex gap-2 overflow-x-auto pb-3 scrollbar-hide">
+          <div className="flex justify-center gap-2 overflow-x-auto pb-3 scrollbar-hide w-full">
             {inCabinetEntries.map(entry => (
               <Card
                 key={entry.id}
@@ -1266,8 +1239,24 @@ const Accueil = () => {
 
             </div>
           </div>
-          <DialogFooter>
-            <Button onClick={handleComplete} disabled={isCompletingClient} className="w-full h-11 sm:h-12">
+          <DialogFooter className="gap-2 flex-col sm:flex-row">
+            <Button
+              variant="outline"
+              className="w-full sm:w-auto h-11 sm:h-12"
+              onClick={async () => {
+                if (!selectedEntry) return;
+                const { error } = await returnToQueue(selectedEntry.id);
+                if (error) {
+                  toast.error('Erreur lors du retour en file');
+                } else {
+                  toast.success(`${selectedEntry.client_id} retourné en file d\'attente`);
+                  setShowCompleteModal(false);
+                }
+              }}
+            >
+              ↩ Retour en file
+            </Button>
+            <Button onClick={handleComplete} disabled={isCompletingClient} className="w-full sm:flex-1 h-11 sm:h-12">
               {isCompletingClient ? 'Enregistrement...' : 'Confirmer'}
             </Button>
           </DialogFooter>

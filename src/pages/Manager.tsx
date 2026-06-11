@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -40,7 +40,7 @@ const Manager = () => {
   const [loading, setLoading] = useState(true);
   const [totalExpenses, setTotalExpenses] = useState(0);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     const fromDate = new Date(dateFrom);
     fromDate.setHours(0, 0, 0, 0);
@@ -81,7 +81,7 @@ const Manager = () => {
     }
     setLoading(false);
 
-  };
+  }, [dateFrom, dateTo]);
 
   useEffect(() => {
     supabase.from('doctors').select('id, name').then(({ data }) => {
@@ -89,7 +89,24 @@ const Manager = () => {
     });
   }, []);
 
-  useEffect(() => { fetchData(); }, [dateFrom, dateTo]);
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Realtime subscriptions + polling fallback
+  useEffect(() => {
+    const channel = supabase
+      .channel('manager-live-updates')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'completed_clients' }, () => fetchData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'expenses' }, () => fetchData())
+      .subscribe();
+
+    // Polling fallback: refresh every 5 seconds
+    const pollInterval = setInterval(() => fetchData(), 5000);
+
+    return () => {
+      clearInterval(pollInterval);
+      supabase.removeChannel(channel);
+    };
+  }, [fetchData]);
 
   const treatments = useMemo(() => {
     const set = new Set(clients.map(c => c.treatment));

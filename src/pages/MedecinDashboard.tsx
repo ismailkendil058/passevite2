@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -81,7 +81,7 @@ const MedecinDashboard = () => {
         }
     });
 
-    const fetchDashboardData = async () => {
+    const fetchDashboardData = useCallback(async () => {
         if (!doctorInfo) return;
         setLoading(true);
         try {
@@ -112,13 +112,33 @@ const MedecinDashboard = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [doctorInfo]);
 
     useEffect(() => {
         if (doctorInfo) {
             fetchDashboardData();
         }
-    }, [doctorInfo]);
+    }, [doctorInfo, fetchDashboardData]);
+
+    // Realtime subscriptions + polling fallback for live updates
+    useEffect(() => {
+        if (!doctorInfo) return;
+
+        const channel = supabase
+            .channel('doctor-dashboard-updates')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'appointments' }, () => fetchDashboardData())
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'completed_clients' }, () => fetchDashboardData())
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'prescriptions' }, () => fetchDashboardData())
+            .subscribe();
+
+        // Polling fallback: refresh every 5 seconds
+        const pollInterval = setInterval(() => fetchDashboardData(), 5000);
+
+        return () => {
+            clearInterval(pollInterval);
+            supabase.removeChannel(channel);
+        };
+    }, [doctorInfo, fetchDashboardData]);
 
     const handleSignOut = async () => {
         await signOut();

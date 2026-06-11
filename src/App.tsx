@@ -55,9 +55,14 @@ function ProtectedRoute({ children, requiredRoles }: { children: React.ReactNode
   if (loading) return <LoadingScreen />;
 
   if (!user) {
-    if (window.location.pathname.startsWith('/appointment')) return <Navigate to="/appointment/login" replace />;
-    if (requiredRoles?.includes('manager')) return <Navigate to="/manager/login" replace />;
+    const path = window.location.pathname;
+    if (path.startsWith('/appointment')) return <Navigate to="/appointment/login" replace />;
+    if (path.startsWith('/accueil')) return <Navigate to="/accueil/login" replace />;
+    if (path.startsWith('/manager')) return <Navigate to="/manager/login" replace />;
+
+    // Fallback based on required roles if path didn't match
     if (requiredRoles?.includes('receptionist')) return <Navigate to="/accueil/login" replace />;
+    if (requiredRoles?.includes('manager')) return <Navigate to="/manager/login" replace />;
     return <Navigate to="/" replace />;
   }
 
