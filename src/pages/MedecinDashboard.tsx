@@ -19,6 +19,7 @@ import {
     Calendar as CalIcon, MessageSquare, XCircle, Pill
 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { format, parseISO, startOfToday, endOfToday, startOfDay } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -105,6 +106,51 @@ const MedecinDashboard = () => {
         default_frequency_unit: 'comprimé(s)',
         default_timing: 'apres'
     });
+
+    // TEMPLATES STATE
+    const [templates, setTemplates] = useState<any[]>(() => {
+        const saved = localStorage.getItem('ordonnance_templates');
+        return saved ? JSON.parse(saved) : [];
+    });
+
+    const saveAsTemplate = () => {
+        if (!ordonnanceForm.medications.some(m => m.name)) {
+            toast.error('Ajoutez au moins un médicament pour créer un modèle');
+            return;
+        }
+
+        const templateName = prompt('Nom du modèle ?', 'Modèle - ' + ordonnanceForm.medications[0].name);
+        if (!templateName) return;
+
+        const newTemplate = {
+            id: Date.now(),
+            name: templateName,
+            medications: ordonnanceForm.medications,
+            notes: ordonnanceForm.notes
+        };
+
+        const updated = [newTemplate, ...templates];
+        setTemplates(updated);
+        localStorage.setItem('ordonnance_templates', JSON.stringify(updated));
+        toast.success('Modèle sauvegardé');
+    };
+
+    const loadTemplate = (template: any) => {
+        setOrdonnanceForm({
+            patient_name: '',
+            date: '',
+            age: '',
+            medications: template.medications,
+            notes: template.notes || ''
+        });
+        toast.success(`Modèle "${template.name}" chargé`);
+    };
+
+    const deleteTemplate = (id: number) => {
+        const updated = templates.filter(t => t.id !== id);
+        setTemplates(updated);
+        localStorage.setItem('ordonnance_templates', JSON.stringify(updated));
+    };
 
 
     // Fetch Patient History (Appointments & Ordonnances)
@@ -335,7 +381,7 @@ const MedecinDashboard = () => {
       <div class="clinic-phone">0554 02 97 32</div>
     </div>
     <div class="patient-fields">
-      <div class="field-line"><span class="field-label">Le :</span><span class="field-dots">${new Date(rx.prescription_date).toLocaleDateString('fr-FR')}</span></div>
+      <div class="field-line"><span class="field-label">Le :</span><span class="field-dots">${format(new Date(rx.prescription_date), 'dd MMMM yyyy', { locale: fr })}</span></div>
       <div class="field-line"><span class="field-label">Nom :</span><span class="field-dots">${rx.patient_name}</span></div>
       <div class="field-line"><span class="field-label">Age :</span><span class="field-dots">${rx.age || '--'} ans</span></div>
     </div>
@@ -488,74 +534,72 @@ const MedecinDashboard = () => {
                         <div className="flex flex-col gap-6">
                             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                                 <h1 className="text-2xl font-black italic text-slate-800">Gestion des Ordonnances</h1>
-                                <Button onClick={() => setShowOrdonnanceModal(true)} className="rounded-xl h-11 px-6 shadow-lg shadow-primary/20 bg-primary hover:bg-primary/90">
-                                    <Plus className="h-4 w-4 mr-2" /> Nouvelle Ordonnance
-                                </Button>
+                                <div className="flex gap-2 h-11 items-center">
+
+                                    <Button onClick={() => setShowOrdonnanceModal(true)} className="rounded-xl h-11 px-6 shadow-lg shadow-primary/20 bg-primary hover:bg-primary/90 font-bold">
+                                        <Plus className="h-4 w-4 mr-2" /> Nouvelle Ordonnance
+                                    </Button>
+                                </div>
                             </div>
 
-                            <Card className="border-none shadow-premium overflow-hidden bg-gradient-to-br from-white to-slate-50">
-                                <CardHeader className="p-6 border-b bg-muted/10">
-                                    <div className="flex flex-wrap gap-4 items-center">
-                                        <div className="relative flex-1 min-w-[200px]">
-                                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                                            <Input
-                                                placeholder="Rechercher par patient ou médicament..."
-                                                value={searchOrdonnance}
-                                                onChange={e => setSearchOrdonnance(e.target.value)}
-                                                className="pl-10 h-11 border-slate-200 rounded-xl focus:ring-primary/20"
-                                            />
-                                        </div>
-                                    </div>
-                                </CardHeader>
-                                <CardContent className="p-0">
-                                    <Table>
-                                        <TableHeader className="bg-muted/30">
-                                            <TableRow>
-                                                <TableHead className="font-bold text-xs">Patient</TableHead>
-                                                <TableHead className="font-bold text-xs">Date</TableHead>
-                                                <TableHead className="font-bold text-xs">Médicaments</TableHead>
-                                                <TableHead className="text-right font-bold text-xs">Action</TableHead>
-                                            </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                            {filteredPrescriptions.map(rx => (
-                                                <TableRow key={rx.id} className="hover:bg-slate-50/80 transition-colors">
-                                                    <TableCell className="font-bold">{rx.patient_name}</TableCell>
-                                                    <TableCell className="text-slate-500 text-sm">
-                                                        {format(new Date(rx.prescription_date), 'dd MMM yyyy', { locale: fr })}
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        <div className="flex flex-wrap gap-1">
-                                                            {rx.medications?.slice(0, 2).map((med: any, i: number) => (
-                                                                <Badge key={i} variant="secondary" className="bg-slate-100 text-[10px] font-medium border-0">
-                                                                    {med.name}
-                                                                </Badge>
-                                                            ))}
-                                                            {rx.medications?.length > 2 && <span className="text-[10px] text-slate-400">+{rx.medications.length - 2}</span>}
+                            {/* TEMPLATES SECTION */}
+                            <div className="space-y-6">
+                                <div className="flex items-center justify-between px-2">
+                                    <h3 className="text-sm font-black uppercase tracking-[0.2em] text-slate-400 flex items-center gap-2">
+                                        <ClipboardList className="h-4 w-4" /> Vos Modèles Sauvegardés
+                                    </h3>
+                                    <Badge variant="outline" className="rounded-full border-slate-200 text-slate-400 font-bold">{templates.length} modèles</Badge>
+                                </div>
+
+                                {templates.length > 0 ? (
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                                        {templates.map(t => (
+                                            <Card
+                                                key={t.id}
+                                                className="border shadow-sm bg-white hover:shadow-xl hover:border-primary/20 transition-all cursor-pointer group rounded-3xl overflow-hidden relative border-slate-100"
+                                                onClick={() => { loadTemplate(t); setShowOrdonnanceModal(true); }}
+                                            >
+                                                <div className="p-5 flex items-center justify-between bg-slate-50/50 group-hover:bg-primary/5 transition-colors">
+                                                    <div className="flex items-center gap-2 overflow-hidden">
+                                                        <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
+                                                        <h4 className="text-[13px] font-black text-slate-700 truncate uppercase tracking-tight">{t.name}</h4>
+                                                    </div>
+                                                    <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); deleteTemplate(t.id); }} className="h-8 w-8 text-slate-300 hover:text-rose-500 rounded-full hover:bg-rose-50">
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
+                                                <div className="p-5 space-y-2 h-24 overflow-hidden bg-white">
+                                                    {t.medications.slice(0, 3).map((m: any, i: number) => (
+                                                        <div key={i} className="flex items-center gap-2">
+                                                            <div className="h-1 w-1 rounded-full bg-slate-300" />
+                                                            <p className="text-[11px] text-slate-500 font-bold truncate">{m.name}</p>
                                                         </div>
-                                                    </TableCell>
-                                                    <TableCell className="text-right">
-                                                        <Button variant="ghost" size="sm" onClick={() => handlePrintOrdonnance(rx)} className="rounded-lg h-8 w-8 text-primary hover:bg-primary/5">
-                                                            <Printer className="h-4 w-4" />
-                                                        </Button>
-                                                    </TableCell>
-                                                </TableRow>
-                                            ))}
-                                        </TableBody>
-                                    </Table>
-                                </CardContent>
-                            </Card>
+                                                    ))}
+                                                    {t.medications.length > 3 && <p className="text-[10px] text-primary/60 font-black italic pl-3">+{t.medications.length - 3} autres...</p>}
+                                                </div>
+                                                <div className="px-5 py-3 border-t bg-slate-50/30 flex justify-end">
+                                                    <span className="text-[9px] font-black uppercase text-primary tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">Charger ce modèle</span>
+                                                </div>
+                                            </Card>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="py-20 text-center bg-white rounded-3xl border-2 border-dashed border-slate-100">
+                                        <div className="h-20 w-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-6">
+                                            <ClipboardList className="h-10 w-10 text-slate-200" />
+                                        </div>
+                                        <h3 className="text-lg font-black text-slate-400 uppercase tracking-widest mb-2">Aucun modèle</h3>
+                                        <p className="text-xs text-slate-400 font-medium max-w-[300px] mx-auto">Créez une ordonnance et cliquez sur "Enregistrer comme modèle" pour la retrouver ici.</p>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </TabsContent>
 
                     {/* CALENDAR CONTENT */}
                     <TabsContent value="calendar" className="mt-6 animate-in fade-in slide-in-from-bottom-2">
                         <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6">
-                            <Card
-                                className={`border-none shadow-premium bg-white rounded-3xl overflow-hidden transition-all duration-300 ${isCalendarFullscreen ? 'fixed inset-0 z-50 rounded-none m-0' : ''
-                                    }`}
-                                onDoubleClick={() => setIsCalendarFullscreen(prev => !prev)}
-                            >
+                            <Card className={`border-none shadow-premium bg-white rounded-3xl overflow-hidden transition-all duration-300 ${isCalendarFullscreen ? 'fixed inset-0 z-50 rounded-none m-0' : ''}`} onDoubleClick={() => setIsCalendarFullscreen(prev => !prev)}>
                                 <CardContent className="p-0 h-full flex flex-col">
                                     <div className="p-6 border-b bg-slate-50/50 flex flex-col sm:flex-row items-center justify-between gap-4">
                                         <div>
@@ -566,171 +610,107 @@ const MedecinDashboard = () => {
                                             <Button variant="outline" className="h-10 px-4 text-xs font-bold uppercase tracking-widest rounded-xl" onClick={() => setCalendarDate(new Date())}>Aujourd'hui</Button>
                                         </div>
                                     </div>
-
                                     <div className="p-4 sm:p-8 flex-1">
                                         <ScrollArea className={`${isCalendarFullscreen ? 'h-[calc(100vh-100px)]' : 'h-[600px]'} pr-4`}>
                                             <div className="grid grid-cols-[60px_1fr] gap-6">
-                                                {/* Time labels */}
                                                 <div className="space-y-[60px] pt-10 text-[10px] font-black text-slate-300 text-right pr-4 border-r border-slate-100">
-                                                    {[
-                                                        '07:00', '07:30', '08:00', '08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '12:00', '12:30',
-                                                        '13:00', '13:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00', '17:30', '18:00', '18:30',
-                                                        '19:00', '19:30', '20:00', '20:30', '21:00', '21:30', '22:00'
-                                                    ].map(t => (
-                                                        <div key={t} className={`h-0 flex items-center justify-end ${t.endsWith(':00') ? 'text-slate-400 font-black' : 'text-slate-300 font-medium'}`}>{t}</div>
-                                                    ))}
+                                                    {['07:00', '07:30', '08:00', '08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '12:00', '12:30', '13:00', '13:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00', '17:30', '18:00', '18:30', '19:00', '19:30', '20:00', '20:30', '21:00', '21:30', '22:00'].map(t => (<div key={t} className={`h-0 flex items-center justify-end ${t.endsWith(':00') ? 'text-slate-400 font-black' : 'text-slate-300 font-medium'}`}>{t}</div>))}
                                                 </div>
-
-                                                {/* Single Column for current Doctor */}
                                                 <div className="relative bg-slate-50/30 rounded-3xl min-h-[2000px] border border-dashed border-slate-200">
-                                                    <div className="sticky top-0 z-10 bg-white/80 backdrop-blur-md p-4 border-b text-center font-black text-xs text-primary uppercase tracking-[0.2em] rounded-t-3xl">
-                                                        Planning {doctorInfo?.name}
-                                                    </div>
-
-                                                    {/* Appointments for this doctor on selected current day */}
-                                                    {parsedAppointments
-                                                        .filter(a => a.status !== 'denied' && a.doctor_id === doctorInfo?.id && a.startOfDayTime === startOfDay(calendarDate || new Date()).getTime())
-                                                        .map(appt => {
-                                                            const date = parseISO(appt.appointment_at);
-                                                            const hours = date.getHours();
-                                                            const minutes = date.getMinutes();
-                                                            const offset = (hours - 7) * 120 + (minutes / 60) * 120 + 64; // Adjusted offset for header
-
-                                                            // Extract duration from notes
-                                                            const durMatch = appt.notes?.match(/\[DUR:(\d+)\]/);
-                                                            const duration = durMatch ? parseInt(durMatch[1]) : 30;
-                                                            const displayNotes = appt.notes?.replace(/\[DUR:\d+\]\s*/, '') || 'Sans note';
-                                                            const cardHeight = (duration / 60) * 120 - 10;
-
-                                                            return (
-                                                                <Card
-                                                                    key={appt.id}
-                                                                    className={cn(
-                                                                        "absolute left-4 right-4 shadow-xl border-l-4 p-4 rounded-2xl cursor-pointer hover:scale-[1.02] transition-all z-20 group",
-                                                                        appt.status === 'completed' ? 'border-l-emerald-500 bg-white' : 'border-l-primary bg-white'
-                                                                    )}
-                                                                    style={{ top: `${offset}px`, height: `${cardHeight}px` }}
-                                                                    onClick={() => { setSelectedPatient(patients.find(p => p.phone === appt.client_phone)); setIsPatientDialogOpen(true); }}
-                                                                >
-                                                                    <div className="flex justify-between items-start">
-                                                                        <div>
-                                                                            <p className="text-[10px] font-black text-primary mb-1 uppercase tracking-widest">{format(date, 'HH:mm')}</p>
-                                                                            <p className="text-sm font-black text-slate-800 leading-tight">{appt.client_name}</p>
-                                                                        </div>
-                                                                        <Badge className={cn("text-[8px] font-black rounded-full h-5",
-                                                                            appt.status === 'completed' ? 'bg-emerald-50 text-emerald-600' : 'bg-primary/5 text-primary'
-                                                                        )}>
-                                                                            {appt.status.toUpperCase()}
-                                                                        </Badge>
+                                                    <div className="sticky top-0 z-10 bg-white/80 backdrop-blur-md p-4 border-b text-center font-black text-xs text-primary uppercase tracking-[0.2em] rounded-t-3xl">Planning {doctorInfo?.name}</div>
+                                                    {parsedAppointments.filter(a => a.status !== 'denied' && a.doctor_id === doctorInfo?.id && a.startOfDayTime === startOfDay(calendarDate || new Date()).getTime()).map(appt => {
+                                                        const date = parseISO(appt.appointment_at);
+                                                        const hours = date.getHours();
+                                                        const minutes = date.getMinutes();
+                                                        const offset = (hours - 7) * 120 + (minutes / 60) * 120 + 64;
+                                                        const durMatch = appt.notes?.match(/\[DUR:(\d+)\]/);
+                                                        const duration = durMatch ? parseInt(durMatch[1]) : 30;
+                                                        const displayNotes = appt.notes?.replace(/\[DUR:\d+\]\s*/, '') || 'Sans note';
+                                                        const cardHeight = (duration / 60) * 120 - 10;
+                                                        return (
+                                                            <Card key={appt.id} className={cn("absolute left-4 right-4 shadow-xl border-l-4 p-4 rounded-2xl cursor-pointer hover:scale-[1.02] transition-all z-20 group", appt.status === 'completed' ? 'border-l-emerald-500 bg-white' : 'border-l-primary bg-white')} style={{ top: `${offset}px`, height: `${cardHeight}px` }} onClick={() => { setSelectedPatient(patients.find(p => p.phone === appt.client_phone)); setIsPatientDialogOpen(true); }}>
+                                                                <div className="flex justify-between items-start">
+                                                                    <div>
+                                                                        <p className="text-[10px] font-black text-primary mb-1 uppercase tracking-widest">{format(date, 'HH:mm')}</p>
+                                                                        <p className="text-sm font-black text-slate-800 leading-tight">{appt.client_name}</p>
                                                                     </div>
-                                                                    <p className="text-[10px] text-slate-400 font-bold mt-1 line-clamp-1">{displayNotes}</p>
-                                                                </Card>
-                                                            );
-                                                        })}
+                                                                    <Badge className={cn("text-[8px] font-black rounded-full h-5", appt.status === 'completed' ? 'bg-emerald-50 text-emerald-600' : 'bg-primary/5 text-primary')}>{appt.status.toUpperCase()}</Badge>
+                                                                </div>
+                                                                <p className="text-[10px] text-slate-400 font-bold mt-1 line-clamp-1">{displayNotes}</p>
+                                                            </Card>
+                                                        );
+                                                    })}
                                                 </div>
                                             </div>
                                         </ScrollArea>
                                     </div>
                                 </CardContent>
                             </Card>
-
                             <div className="space-y-6">
                                 <Card className="border-none shadow-premium bg-white rounded-3xl p-2">
-                                    <Calendar
-                                        mode="single"
-                                        selected={calendarDate}
-                                        onSelect={setCalendarDate}
-                                        className="rounded-2xl"
-                                        locale={fr}
-                                    />
+                                    <Calendar mode="single" selected={calendarDate} onSelect={setCalendarDate} className="rounded-2xl" locale={fr} />
                                 </Card>
-
                                 <Card className="border-none shadow-premium bg-primary text-white p-6 rounded-[2rem]">
                                     <div className="flex items-center gap-3 mb-6">
-                                        <div className="h-10 w-10 bg-white/20 rounded-2xl flex items-center justify-center">
-                                            <CalIcon className="h-5 w-5 text-white" />
-                                        </div>
+                                        <div className="h-10 w-10 bg-white/20 rounded-2xl flex items-center justify-center"><CalIcon className="h-5 w-5 text-white" /></div>
                                         <h4 className="font-black italic text-lg">Résumé Journée</h4>
                                     </div>
                                     <div className="space-y-4">
                                         <div className="flex justify-between items-center bg-white/10 p-4 rounded-2xl">
                                             <span className="text-[10px] font-black uppercase tracking-widest opacity-60">À venir</span>
-                                            <span className="text-2xl font-black">
-                                                {parsedAppointments.filter(a => a.doctor_id === doctorInfo?.id && a.status === 'scheduled' && a.startOfDayTime === startOfDay(calendarDate || new Date()).getTime()).length}
-                                            </span>
+                                            <span className="text-2xl font-black">{parsedAppointments.filter(a => a.doctor_id === doctorInfo?.id && a.status === 'scheduled' && a.startOfDayTime === startOfDay(calendarDate || new Date()).getTime()).length}</span>
                                         </div>
                                         <div className="flex justify-between items-center bg-white/10 p-4 rounded-2xl">
                                             <span className="text-[10px] font-black uppercase tracking-widest opacity-60">Terminés</span>
-                                            <span className="text-2xl font-black">
-                                                {parsedAppointments.filter(a => a.doctor_id === doctorInfo?.id && a.status === 'completed' && a.startOfDayTime === startOfDay(calendarDate || new Date()).getTime()).length}
-                                            </span>
+                                            <span className="text-2xl font-black">{parsedAppointments.filter(a => a.doctor_id === doctorInfo?.id && a.status === 'completed' && a.startOfDayTime === startOfDay(calendarDate || new Date()).getTime()).length}</span>
                                         </div>
                                     </div>
                                 </Card>
                             </div>
                         </div>
-                    </TabsContent >
+                    </TabsContent>
 
                     {/* PATIENTS CONTENT */}
-                    < TabsContent value="patients" className="mt-6 animate-in fade-in slide-in-from-bottom-2" >
+                    <TabsContent value="patients" className="mt-6 animate-in fade-in slide-in-from-bottom-2">
                         <div className="space-y-6">
                             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                                 <h1 className="text-2xl font-black italic text-slate-800">Votre Fichier Patient</h1>
                                 <div className="relative w-full sm:w-80">
                                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                                    <Input
-                                        placeholder="Nom ou téléphone..."
-                                        value={searchPatient}
-                                        onChange={e => setSearchPatient(e.target.value)}
-                                        className="pl-10 h-11 border-slate-200 rounded-xl"
-                                    />
+                                    <Input placeholder="Nom ou téléphone..." value={searchPatient} onChange={e => setSearchPatient(e.target.value)} className="pl-10 h-11 border-slate-200 rounded-xl" />
                                 </div>
                             </div>
-
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                 {filteredPatientsList.map(p => (
                                     <Card key={p.id} className="border-none shadow-premium bg-white hover:shadow-lg transition-all cursor-pointer group" onClick={() => { setSelectedPatient(p); setIsPatientDialogOpen(true); }}>
                                         <CardContent className="p-6">
                                             <div className="flex items-center gap-4 mb-4">
-                                                <div className="h-12 w-12 rounded-2xl bg-primary/5 flex items-center justify-center text-primary font-black text-xl group-hover:bg-primary group-hover:text-white transition-all">
-                                                    {p.client_name.charAt(0)}
-                                                </div>
+                                                <div className="h-12 w-12 rounded-2xl bg-primary/5 flex items-center justify-center text-primary font-black text-xl group-hover:bg-primary group-hover:text-white transition-all">{p.client_name.charAt(0)}</div>
                                                 <div>
                                                     <h3 className="font-bold text-slate-800">{p.client_name}</h3>
                                                     <p className="text-xs text-slate-400">{p.phone}</p>
                                                 </div>
                                             </div>
                                             <div className="space-y-2 border-t pt-4">
-                                                <div className="flex justify-between text-xs font-medium">
-                                                    <span className="text-slate-400 uppercase tracking-widest">Traitement</span>
-                                                    <span className="text-slate-700">{p.treatment}</span>
-                                                </div>
-                                                <div className="flex justify-between text-xs font-medium">
-                                                    <span className="text-slate-400 uppercase tracking-widest">Dernière séance</span>
-                                                    <span className="text-slate-700">{format(new Date(p.completed_at), 'dd/MM/yy')}</span>
-                                                </div>
+                                                <div className="flex justify-between text-xs font-medium"><span className="text-slate-400 uppercase tracking-widest">Traitement</span><span className="text-slate-700">{p.treatment}</span></div>
+                                                <div className="flex justify-between text-xs font-medium"><span className="text-slate-400 uppercase tracking-widest">Dernière séance</span><span className="text-slate-700">{format(new Date(p.completed_at), 'dd/MM/yy')}</span></div>
                                             </div>
                                         </CardContent>
                                     </Card>
                                 ))}
                             </div>
                         </div>
-                    </TabsContent >
+                    </TabsContent>
 
                     {/* ANALYTICS CONTENT */}
-                    < TabsContent value="analytics" className="mt-6 animate-in fade-in slide-in-from-bottom-2" >
+                    <TabsContent value="analytics" className="mt-6 animate-in fade-in slide-in-from-bottom-2">
                         <div className="space-y-8">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <Card className="border-none shadow-premium bg-gradient-to-br from-indigo-500 to-indigo-600 text-white rounded-3xl">
                                     <CardContent className="p-6">
                                         <div className="flex justify-between items-start mb-4">
                                             <DollarSign className="h-8 w-8 text-white/20" />
-                                            <Input
-                                                type="date"
-                                                value={selectedRevenueDate}
-                                                onChange={e => setSelectedRevenueDate(e.target.value)}
-                                                className="w-auto h-7 text-[10px] font-bold bg-white/10 border-0 rounded-full text-white cursor-pointer"
-                                            />
+                                            <Input type="date" value={selectedRevenueDate} onChange={e => setSelectedRevenueDate(e.target.value)} className="w-auto h-7 text-[10px] font-bold bg-white/10 border-0 rounded-full text-white cursor-pointer" />
                                         </div>
                                         <p className="text-white/60 text-xs font-bold uppercase tracking-widest">Revenu du Jour Choisi</p>
                                         <h3 className="text-3xl font-black">{selectedDayRevenue.toLocaleString()} DZD</h3>
@@ -740,17 +720,14 @@ const MedecinDashboard = () => {
                                     <CardContent className="p-6">
                                         <Users className="h-8 w-8 text-primary/20 mb-4" />
                                         <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">Patients Actifs</p>
-                                        <h3 className="text-3xl font-black text-slate-800">{patients.length}</h3>
+                                        <h3 className="text-3xl font-black text-slate-800">{filteredPaymentsByDate.length}</h3>
                                     </CardContent>
                                 </Card>
                             </div>
-
                             <div className="grid grid-cols-1 gap-8">
                                 <Card className="border-none shadow-premium bg-white rounded-3xl overflow-hidden">
                                     <CardHeader className="p-6 border-b bg-muted/10">
-                                        <CardTitle className="text-lg font-black italic flex items-center gap-2">
-                                            <DollarSign className="h-5 w-5 text-primary" /> Détails des Paiements Récents
-                                        </CardTitle>
+                                        <CardTitle className="text-lg font-black italic flex items-center gap-2"><DollarSign className="h-5 w-5 text-primary" /> Détails des Paiements Récents</CardTitle>
                                         <CardDescription className="text-xs uppercase font-bold tracking-widest opacity-60">Dernières consultations terminées</CardDescription>
                                     </CardHeader>
                                     <CardContent className="p-0">
@@ -769,32 +746,16 @@ const MedecinDashboard = () => {
                                                 <TableBody>
                                                     {filteredPaymentsByDate.map((p, idx) => (
                                                         <TableRow key={p.id || idx} className="hover:bg-slate-50 transition-colors">
-                                                            <TableCell className="text-center">
-                                                                <p className="font-black text-sm text-foreground uppercase tracking-tight">{p.client_name}</p>
-                                                            </TableCell>
-                                                            <TableCell className="text-center text-xs text-muted-foreground font-bold">
-                                                                {format(new Date(p.completed_at), 'dd/MM HH:mm')}
-                                                            </TableCell>
-                                                            <TableCell className="text-center text-xs font-bold text-primary italic">
-                                                                {p.treatment}
-                                                            </TableCell>
-                                                            <TableCell className="text-center font-bold text-slate-700">
-                                                                {p.total_amount?.toLocaleString()}
-                                                            </TableCell>
-                                                            <TableCell className="text-center font-black text-emerald-600 bg-emerald-50/50">
-                                                                {p.tranche_paid?.toLocaleString()}
-                                                            </TableCell>
-                                                            <TableCell className="text-center font-black text-rose-500">
-                                                                {(p.total_amount - (p.tranche_paid || 0)).toLocaleString()}
-                                                            </TableCell>
+                                                            <TableCell className="text-center font-black text-sm text-foreground uppercase tracking-tight">{p.client_name}</TableCell>
+                                                            <TableCell className="text-center text-xs text-muted-foreground font-bold">{format(new Date(p.completed_at), 'dd/MM HH:mm')}</TableCell>
+                                                            <TableCell className="text-center text-xs font-bold text-primary italic">{p.treatment}</TableCell>
+                                                            <TableCell className="text-center font-bold text-slate-700">{p.total_amount?.toLocaleString()}</TableCell>
+                                                            <TableCell className="text-center font-black text-emerald-600 bg-emerald-50/50">{p.tranche_paid?.toLocaleString()}</TableCell>
+                                                            <TableCell className="text-center font-black text-rose-500">{(p.total_amount - (p.tranche_paid || 0)).toLocaleString()}</TableCell>
                                                         </TableRow>
                                                     ))}
                                                     {filteredPaymentsByDate.length === 0 && (
-                                                        <TableRow>
-                                                            <TableCell colSpan={6} className="text-center py-20 text-muted-foreground italic font-bold">
-                                                                Aucun paiement pour cette date
-                                                            </TableCell>
-                                                        </TableRow>
+                                                        <TableRow><TableCell colSpan={6} className="text-center py-20 text-muted-foreground italic font-bold">Aucun paiement pour cette date</TableCell></TableRow>
                                                     )}
                                                 </TableBody>
                                             </Table>
@@ -803,12 +764,12 @@ const MedecinDashboard = () => {
                                 </Card>
                             </div>
                         </div>
-                    </TabsContent >
-                </Tabs >
-            </main >
+                    </TabsContent>
+                </Tabs>
+            </main>
 
             {/* FICHE MALADE DIALOG */}
-            < Dialog open={isPatientDialogOpen} onOpenChange={setIsPatientDialogOpen} >
+            <Dialog open={isPatientDialogOpen} onOpenChange={setIsPatientDialogOpen}>
                 <DialogContent className="max-w-3xl overflow-hidden rounded-3xl p-0 border shadow-2xl bg-white animate-in zoom-in-95 duration-200">
                     {selectedPatient && (
                         <div className="flex flex-col h-[85vh]">
@@ -947,7 +908,7 @@ const MedecinDashboard = () => {
                         </div>
                     )}
                 </DialogContent>
-            </Dialog >
+            </Dialog>
 
             <Dialog open={!!viewingNote} onOpenChange={(open) => !open && setViewingNote(null)}>
                 <DialogContent className="max-w-sm w-[90vw] rounded-2xl p-6 shadow-2xl border-none">
@@ -975,7 +936,7 @@ const MedecinDashboard = () => {
             </footer>
 
             {/* CREATION ORDONNANCE MODAL */}
-            < Dialog open={showOrdonnanceModal} onOpenChange={setShowOrdonnanceModal} >
+            <Dialog open={showOrdonnanceModal} onOpenChange={setShowOrdonnanceModal}>
                 <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden rounded-[2.5rem] border-none shadow-2xl p-0 flex flex-col bg-white">
                     <DialogHeader className="p-8 border-b bg-slate-50/50 flex-shrink-0">
                         <DialogTitle className="text-2xl font-black italic text-primary flex items-center gap-3">
@@ -987,7 +948,29 @@ const MedecinDashboard = () => {
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                             <div className="space-y-2">
                                 <label className="text-[11px] font-black uppercase tracking-widest text-slate-400">Date de prescription</label>
-                                <Input type="date" value={ordonnanceForm.date} onChange={e => setOrdonnanceForm({ ...ordonnanceForm, date: e.target.value })} className="h-12 rounded-2xl border-slate-200 bg-slate-50 font-bold" />
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                        <Button
+                                            variant={"outline"}
+                                            className={cn(
+                                                "w-full h-12 rounded-2xl border-slate-200 bg-slate-50 font-bold justify-start text-left",
+                                                !ordonnanceForm.date && "text-muted-foreground"
+                                            )}
+                                        >
+                                            <CalendarIcon className="mr-2 h-4 w-4" />
+                                            {ordonnanceForm.date ? format(parseISO(ordonnanceForm.date), "dd/MM/yyyy") : <span>Choisir une date</span>}
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-auto p-0 rounded-2xl border-none shadow-2xl bg-white" align="start">
+                                        <Calendar
+                                            mode="single"
+                                            selected={ordonnanceForm.date ? parseISO(ordonnanceForm.date) : undefined}
+                                            onSelect={(date) => setOrdonnanceForm({ ...ordonnanceForm, date: date ? format(date, "yyyy-MM-dd") : '' })}
+                                            initialFocus
+                                            locale={fr}
+                                        />
+                                    </PopoverContent>
+                                </Popover>
                             </div>
                             <div className="md:col-span-1 space-y-2">
                                 <label className="text-[11px] font-black uppercase tracking-widest text-slate-400">Nom du patient *</label>
@@ -1110,14 +1093,18 @@ const MedecinDashboard = () => {
                         </div>
                     </div>
 
-                    <DialogFooter className="p-8 border-t bg-slate-50/50 flex-shrink-0 gap-3">
-                        <Button variant="ghost" onClick={() => setShowOrdonnanceModal(false)} className="rounded-xl font-bold h-12 px-6">Annuler</Button>
-                        <Button variant="outline" onClick={() => handlePrintOrdonnance({ ...ordonnanceForm, prescription_date: ordonnanceForm.date })} className="rounded-xl font-bold h-12 px-6 border-slate-300 text-slate-600">
-                            <Printer className="h-5 w-5 mr-2" /> Imprimer
-                        </Button>
-                        <Button onClick={handleSaveOrdonnance} disabled={savingOrdonnance} className="rounded-xl font-black h-12 px-10 shadow-xl shadow-primary/20 bg-primary text-white hover:bg-primary/90">
-                            {savingOrdonnance ? 'Enregistrement...' : 'Enregistrer Ordonnance'}
-                        </Button>
+                    <DialogFooter className="p-8 border-t bg-slate-50/50 flex-shrink-0 flex sm:justify-between items-center gap-3">
+                        <div className="flex gap-2">
+                            <Button variant="outline" onClick={saveAsTemplate} className="rounded-xl font-bold h-12 px-4 border-slate-300 text-slate-600 bg-white hover:bg-slate-50">
+                                <ClipboardList className="h-5 w-5 mr-2" /> Enregistrer comme Modèle
+                            </Button>
+                        </div>
+                        <div className="flex gap-3">
+                            <Button variant="ghost" onClick={() => setShowOrdonnanceModal(false)} className="rounded-xl font-bold h-12 px-6">Annuler</Button>
+                            <Button variant="outline" onClick={() => handlePrintOrdonnance({ ...ordonnanceForm, prescription_date: ordonnanceForm.date })} className="rounded-xl font-black h-12 px-10 border-primary text-primary hover:bg-primary/5 shadow-lg shadow-primary/10 flex-1 sm:flex-none">
+                                <Printer className="h-5 w-5 mr-3" /> Imprimer l'Ordonnance
+                            </Button>
+                        </div>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
@@ -1172,7 +1159,7 @@ const MedecinDashboard = () => {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
-        </div >
+        </div>
     );
 };
 

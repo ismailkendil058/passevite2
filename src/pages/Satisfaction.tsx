@@ -17,7 +17,7 @@ const Satisfaction = () => {
     } catch (error) {
       console.error('An unexpected error occurred:', error);
     } finally {
-      navigate('/avis-google');
+      window.location.href = 'https://search.google.com/local/writereview?placeid=ChIJMdVNhCCxjxIRR4IfBYih-aE';
     }
   };
 
@@ -50,11 +50,11 @@ const Satisfaction = () => {
           {/* Oui Button */}
           <Button
             size="lg"
-            className="h-20 w-full text-xl md:text-2xl font-bold shadow-2xl shadow-primary/20 hover:shadow-primary/30 transition-all duration-300 rounded-2xl bg-primary text-primary-foreground border-2 border-primary/20 backdrop-blur-sm hover:scale-[1.02] active:scale-[0.98]"
+            className="h-auto min-h-[5rem] py-4 w-full text-[15px] sm:text-lg md:text-xl lg:text-2xl font-bold shadow-2xl shadow-primary/20 hover:shadow-primary/30 transition-all duration-300 rounded-2xl bg-primary text-primary-foreground border-2 border-primary/20 backdrop-blur-sm hover:scale-[1.02] active:scale-[0.98] px-4"
             onClick={handleSatisfaction}
           >
-            <Smile className="w-8 h-8 mr-3 group-hover:animate-bounce" />
-            Oui, je suis satisfaite
+            <Smile className="w-6 h-6 md:w-8 md:h-8 mr-2 flex-shrink-0 group-hover:bounce" />
+            <span className="leading-tight text-center">Oui, je suis satisfait(e)</span>
           </Button>
 
           {/* Non Button */}
@@ -62,10 +62,10 @@ const Satisfaction = () => {
             <Button
               variant="outline"
               size="lg"
-              className="h-20 w-full text-xl md:text-2xl font-bold shadow-xl shadow-gray-200/50 hover:shadow-gray-300/50 transition-all duration-300 rounded-2xl border-2 hover:border-gray-300 backdrop-blur-sm hover:scale-[1.02] active:scale-[0.98]"
+              className="h-auto min-h-[5rem] py-4 w-full text-[15px] sm:text-lg md:text-xl lg:text-2xl font-bold shadow-xl shadow-gray-200/50 hover:shadow-gray-300/50 transition-all duration-300 rounded-2xl border-2 hover:border-gray-300 backdrop-blur-sm hover:scale-[1.02] active:scale-[0.98] px-4"
             >
-              <Frown className="w-8 h-8 mr-3 group-hover:rotate-12 transition-transform duration-300" />
-              Non, je ne suis pas satisfaite
+              <Frown className="w-6 h-6 md:w-8 md:h-8 mr-2 flex-shrink-0 group-hover:rotate-12 transition-transform duration-300" />
+              <span className="leading-tight text-center">Non, je ne suis pas satisfait(e)</span>
             </Button>
           </Link>
         </div>
