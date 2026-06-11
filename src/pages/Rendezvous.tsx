@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
+import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -45,6 +46,7 @@ interface Appointment {
     appointment_at: string;
     status: 'scheduled' | 'confirmed' | 'coming' | 'denied' | 'no_answer' | 'attended';
     notes: string;
+    duration?: number; // duration in minutes
     doctor?: { name: string; initial: string };
 }
 
@@ -94,7 +96,13 @@ const Rendezvous = () => {
     const [newApptTime, setNewApptTime] = useState('09:00');
     const [newApptDoctor, setNewApptDoctor] = useState('');
     const [newApptNotes, setNewApptNotes] = useState('');
+    const [newApptDuration, setNewApptDuration] = useState(30);
     const [editingApptId, setEditingApptId] = useState<string | null>(null);
+    const [apptSearchQuery, setApptSearchQuery] = useState('');
+    const [apptStatusFilter, setApptStatusFilter] = useState<'all' | 'pending' | 'accepted' | 'denied'>('all');
+    const [isNewPatientForAppt, setIsNewPatientForAppt] = useState(false);
+    const [apptNewPatientName, setApptNewPatientName] = useState('');
+    const [apptNewPatientPhone, setApptNewPatientPhone] = useState('');
     const { user, userRole, signOut } = useAuth();
     const [editingVisit, setEditingVisit] = useState<CompletedClient | null>(null);
     const [isAddVisitOpen, setIsAddVisitOpen] = useState(false);
@@ -104,6 +112,7 @@ const Rendezvous = () => {
     const [showAddAppt, setShowAddAppt] = useState(false);
     const [isBaseInfoOpen, setIsBaseInfoOpen] = useState(false);
     const [isDeletingPatient, setIsDeletingPatient] = useState(false);
+    const [isCalendarFullscreen, setIsCalendarFullscreen] = useState(false);
     const [baseInfo, setBaseInfo] = useState({ name: '', phone: '', client_id: '' });
     const [newVisitData, setNewVisitData] = useState<Partial<CompletedClient & { apptDate: Date; apptTime: string; apptDoctor: string; apptNotes: string }>>({
         client_name: '',
@@ -143,8 +152,12 @@ const Rendezvous = () => {
             if (apptsData) setAppointments(apptsData as any);
             if (docsData) {
                 setDoctors(docsData as any);
-                if (docsData.length > 0 && window.innerWidth < 640) {
-                    setSelectedDoctorMobile(docsData[0].id);
+                if (docsData.length > 0) {
+                    if (window.innerWidth < 640) {
+                        setSelectedDoctorMobile(docsData[0].id);
+                    }
+                    // Pre-select first doctor for new visits to avoid null doctor_id
+                    setNewVisitData(prev => ({ ...prev, doctor_id: docsData[0].id, apptDoctor: docsData[0].id }));
                 }
             }
         } catch (error) {
@@ -182,13 +195,18 @@ const Rendezvous = () => {
             // 1. Handle Treatment (completed_clients)
             // Always create a record for a new entry to establish the patient in the system
             if (showAddTreatment || editingVisit || isNewEntry) {
+                if (!activeSessionId) {
+                    toast.error('Aucune séance active. Veuillez ouvrir une séance depuis le Manager.');
+                    return;
+                }
+
                 const treatmentData: any = {
                     client_name: visit.client_name,
                     phone: visit.phone,
                     treatment: (showAddTreatment || editingVisit) && visit.treatment ? visit.treatment : 'Nouveau Patient',
                     total_amount: Number(visit.total_amount || 0),
                     tranche_paid: Number(visit.tranche_paid || 0),
-                    doctor_id: visit.doctor_id || null,
+                    doctor_id: visit.doctor_id || (doctors.length > 0 ? doctors[0].id : null),
                     notes: visit.notes || null,
                     completed_at: visit.completed_at || new Date().toISOString(),
                     state: visit.state || 'N',
@@ -197,13 +215,17 @@ const Rendezvous = () => {
                     client_id: visit.client_id || `ADM-${Date.now()}`
                 };
 
-                let error;
-                if (visit.id) {
-                    const { error: err } = await supabase.from('completed_clients').update(treatmentData).eq('id', visit.id);
-                    error = err;
-                } else {
-                    const { error: err } = await supabase.from('completed_clients').insert(treatmentData);
-                    error = err;
+                let { error } = visit.id
+                    ? await supabase.from('completed_clients').update(treatmentData).eq('id', visit.id)
+                    : await supabase.from('completed_clients').insert(treatmentData);
+
+                // Fallback for receptionist_id constraint if needed
+                if (error && error.code === '23503' && error.message?.includes('receptionist_id')) {
+                    treatmentData.receptionist_id = 'a44e7e83-189f-4f82-96d8-b0eeea4ab104';
+                    const retry = visit.id
+                        ? await supabase.from('completed_clients').update(treatmentData).eq('id', visit.id)
+                        : await supabase.from('completed_clients').insert(treatmentData);
+                    error = retry.error;
                 }
 
                 if (error) throw error;
@@ -242,9 +264,10 @@ const Rendezvous = () => {
             fetchClients();
 
             toast.success('Enregistré avec succès');
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error saving visit/appt:', error);
-            toast.error('Erreur lors de l\'enregistrement');
+            const msg = error.message || error.details || 'Erreur lors de l\'enregistrement';
+            toast.error(msg);
         }
     };
 
@@ -446,6 +469,15 @@ const Rendezvous = () => {
         return () => clearTimeout(timeoutId);
     }, [searchQuery]);
 
+    // Escape key to exit fullscreen calendar
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape' && isCalendarFullscreen) setIsCalendarFullscreen(false);
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isCalendarFullscreen]);
+
     // Deduplication and debt filtering logic
     const uniqueClients = useMemo(() => {
         const patientData = new Map<string, { latest: CompletedClient, totalPaid: number }>();
@@ -506,6 +538,15 @@ const Rendezvous = () => {
 
     const filteredClients = uniqueClients; // keep for other uses
 
+    const filteredSuggestions = useMemo(() => {
+        if (!apptSearchQuery.trim()) return [];
+        const q = apptSearchQuery.toLowerCase();
+        return uniqueClients.filter(c =>
+            c.client_name.toLowerCase().includes(q) ||
+            c.phone.includes(q)
+        ).slice(0, 5);
+    }, [apptSearchQuery, uniqueClients]);
+
     const parsedAppointments = useMemo(() => {
         return appointments.map(a => ({
             ...a,
@@ -519,9 +560,16 @@ const Rendezvous = () => {
         return parsedAppointments.filter(a => {
             const apptDate = parseISO(a.appointment_at);
             const isWithin24h = isWithinInterval(apptDate, { start: now, end: next24h });
-            return isWithin24h && (a.status === 'scheduled' || a.status === 'confirmed');
+
+            const matchesStatus =
+                apptStatusFilter === 'all' ||
+                (apptStatusFilter === 'accepted' && a.status === 'coming') ||
+                (apptStatusFilter === 'denied' && a.status === 'denied') ||
+                (apptStatusFilter === 'pending' && (a.status === 'scheduled' || a.status === 'confirmed'));
+
+            return isWithin24h && matchesStatus && (a.status === 'scheduled' || a.status === 'confirmed' || a.status === 'coming' || a.status === 'denied');
         });
-    }, [parsedAppointments]);
+    }, [parsedAppointments, apptStatusFilter]);
 
     const handleUpdateStatus = async (id: string, status: Appointment['status']) => {
         const { error } = await supabase
@@ -581,8 +629,27 @@ const Rendezvous = () => {
     };
 
     const handleScheduleAppt = async () => {
-        if (!selectedClient || !newApptDate || !newApptDoctor) {
-            toast.error('Veuillez remplir tous les champs');
+        let clientName = '';
+        let clientPhone = '';
+
+        if (isNewPatientForAppt) {
+            if (!apptNewPatientName || !apptNewPatientPhone) {
+                toast.error('Veuillez remplir le nom et le téléphone');
+                return;
+            }
+            clientName = apptNewPatientName;
+            clientPhone = apptNewPatientPhone;
+        } else {
+            if (!selectedClient) {
+                toast.error('Veuillez sélectionner un patient');
+                return;
+            }
+            clientName = selectedClient.name;
+            clientPhone = selectedClient.phone;
+        }
+
+        if (!newApptDate || !newApptDoctor) {
+            toast.error('Veuillez remplir la date et le médecin');
             return;
         }
 
@@ -590,70 +657,99 @@ const Rendezvous = () => {
         const h = parseInt(hours);
         const m = parseInt(minutes);
 
-        if (h < 8 || h > 18 || (h === 18 && m > 0)) {
-            toast.error('Les horaires sont limités de 08:00 à 18:00');
+        if (h < 7 || h > 22 || (h === 22 && m > 0)) {
+            toast.error('Les horaires sont limités de 07:00 à 22:00');
             return;
         }
 
         const appointmentAt = new Date(newApptDate);
         appointmentAt.setHours(h, m, 0, 0);
 
-        const appointmentData = {
-            client_phone: selectedClient.phone,
-            client_name: selectedClient.name,
-            doctor_id: newApptDoctor,
-            appointment_at: appointmentAt.toISOString(),
-            notes: newApptNotes,
-            status: 'scheduled' as Appointment['status']
-        };
+        const finalNotes = `[DUR:${newApptDuration}] ${newApptNotes.trim()}`;
 
         if (editingApptId) {
-            const { data, error } = await supabase
+            const { error } = await supabase
                 .from('appointments')
-                .update(appointmentData)
-                .eq('id', editingApptId)
-                .select('*, doctor:doctors(*)')
-                .single();
+                .update({
+                    client_name: clientName,
+                    client_phone: clientPhone,
+                    doctor_id: newApptDoctor,
+                    appointment_at: appointmentAt.toISOString(),
+                    notes: finalNotes
+                })
+                .eq('id', editingApptId);
 
-            if (error) {
-                toast.error('Erreur lors de la mise à jour du rendez-vous');
-            } else {
-                setAppointments(prev => prev.map(a => a.id === editingApptId ? (data as any) : a).sort((a, b) =>
-                    new Date(a.appointment_at).getTime() - new Date(b.appointment_at).getTime()
-                ));
-                toast.success('Rendez-vous mis à jour');
+            if (error) toast.error('Erreur lors de la modification');
+            else {
+                toast.success('Rendez-vous modifié');
                 setIsScheduleOpen(false);
-                setEditingApptId(null);
-                setNewApptNotes('');
+                fetchInitialData();
             }
         } else {
-            const { data, error } = await supabase
+            const { error } = await supabase
                 .from('appointments')
-                .insert(appointmentData)
-                .select('*, doctor:doctors(*)')
-                .single();
+                .insert({
+                    client_name: clientName,
+                    client_phone: clientPhone,
+                    doctor_id: newApptDoctor,
+                    appointment_at: appointmentAt.toISOString(),
+                    status: 'scheduled',
+                    notes: finalNotes
+                });
 
-            if (error) {
-                toast.error('Erreur lors de la création du rendez-vous');
-            } else {
-                setAppointments(prev => [...prev, data as any].sort((a, b) =>
-                    new Date(a.appointment_at).getTime() - new Date(b.appointment_at).getTime()
-                ));
+            if (error) toast.error("Erreur lors de l'enregistrement");
+            else {
                 toast.success('Rendez-vous programmé');
                 setIsScheduleOpen(false);
-                setNewApptNotes('');
+                fetchInitialData();
             }
         }
     };
 
     const openEditModal = (appt: Appointment) => {
         setEditingApptId(appt.id);
-        setSelectedClient({ phone: appt.client_phone, name: appt.client_name });
         const date = parseISO(appt.appointment_at);
         setNewApptDate(date);
         setNewApptTime(format(date, 'HH:mm'));
         setNewApptDoctor(appt.doctor_id);
-        setNewApptNotes(appt.notes || '');
+
+        // Parse duration from notes if it exists in format [DUR:X]
+        const durMatch = appt.notes?.match(/\[DUR:(\d+)\]/);
+        if (durMatch) {
+            setNewApptDuration(parseInt(durMatch[1]));
+            setNewApptNotes(appt.notes.replace(/\[DUR:\d+\]\s*/, ''));
+        } else {
+            setNewApptDuration(30);
+            setNewApptNotes(appt.notes || '');
+        }
+
+        setSelectedClient({ phone: appt.client_phone, name: appt.client_name });
+        setIsScheduleOpen(true);
+    };
+
+    const handleEmptySlotClick = (e: React.MouseEvent<HTMLDivElement>, doctorId: string) => {
+        // Only trigger if clicking directly on the column background
+        if (e.target !== e.currentTarget) return;
+
+        const rect = e.currentTarget.getBoundingClientRect();
+        const offsetY = e.clientY - rect.top;
+
+        // Each 30 mins is 60px. Each hour is 120px. 
+        // 0px -> 07:00, 60px -> 07:30, etc.
+        const totalMinutes = Math.max(0, Math.floor(offsetY / 60) * 30);
+        const hour = 7 + Math.floor(totalMinutes / 60);
+        const minute = totalMinutes % 60;
+
+        // Limit to 22:00
+        if (hour >= 22 && minute > 0) return;
+
+        const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+
+        setNewApptTime(timeString);
+        setNewApptDoctor(doctorId);
+        setEditingApptId(null);
+        setSelectedClient(null);
+        setNewApptNotes('');
         setIsScheduleOpen(true);
     };
 
@@ -744,7 +840,45 @@ const Rendezvous = () => {
 
                     <TabsContent value="upcoming" className="mt-6 animate-in fade-in slide-in-from-bottom-2">
                         <div className="grid gap-4">
-                            <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider px-1">Prochaines 24 Heures</h2>
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-1">
+                                <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Prochaines 24 Heures</h2>
+
+                                <div className="flex gap-1.5 p-1 bg-muted/40 rounded-full w-fit">
+                                    <Button
+                                        variant={apptStatusFilter === 'all' ? "secondary" : "ghost"}
+                                        size="sm"
+                                        className="rounded-full text-[10px] h-7 px-3 uppercase font-bold"
+                                        onClick={() => setApptStatusFilter('all')}
+                                    >
+                                        Tous
+                                    </Button>
+                                    <Button
+                                        variant={apptStatusFilter === 'pending' ? "secondary" : "ghost"}
+                                        size="sm"
+                                        className="rounded-full text-[10px] h-7 px-3 uppercase font-bold"
+                                        onClick={() => setApptStatusFilter('pending')}
+                                    >
+                                        Attente
+                                    </Button>
+                                    <Button
+                                        variant={apptStatusFilter === 'accepted' ? "secondary" : "ghost"}
+                                        size="sm"
+                                        className="rounded-full text-[10px] h-7 px-3 uppercase font-bold text-emerald-600 hover:text-emerald-700"
+                                        onClick={() => setApptStatusFilter('accepted')}
+                                    >
+                                        Venues
+                                    </Button>
+                                    <Button
+                                        variant={apptStatusFilter === 'denied' ? "secondary" : "ghost"}
+                                        size="sm"
+                                        className="rounded-full text-[10px] h-7 px-3 uppercase font-bold text-rose-600 hover:text-rose-700"
+                                        onClick={() => setApptStatusFilter('denied')}
+                                    >
+                                        Refusés
+                                    </Button>
+                                </div>
+                            </div>
+
                             {loading ? (
                                 <div className="h-32 flex items-center justify-center border rounded-xl border-dashed">
                                     <div className="animate-spin h-5 w-5 border-2 border-primary border-t-transparent rounded-full" />
@@ -758,7 +892,16 @@ const Rendezvous = () => {
                                 </Card>
                             ) : (
                                 upcomingAppointments.map(appt => (
-                                    <Card key={appt.id} className="overflow-hidden border-none shadow-premium bg-gradient-to-br from-white to-slate-50 dark:from-white/5 dark:to-transparent cursor-pointer hover:shadow-lg transition-shadow" onClick={() => openEditModal(appt)}>
+                                    <Card
+                                        key={appt.id}
+                                        className={cn(
+                                            "overflow-hidden border-none shadow-premium cursor-pointer hover:shadow-lg transition-all",
+                                            appt.status === 'coming' ? "bg-emerald-50/80 dark:bg-emerald-900/10 shadow-emerald-100" :
+                                                appt.status === 'denied' ? "bg-rose-50/80 dark:bg-rose-900/10 shadow-rose-100" :
+                                                    "bg-gradient-to-br from-white to-slate-50 dark:from-white/5 dark:to-transparent"
+                                        )}
+                                        onClick={() => openEditModal(appt)}
+                                    >
                                         <CardContent className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                                             <div className="flex gap-4">
                                                 <div className="bg-primary/5 p-3 rounded-2xl flex flex-col items-center justify-center min-w-[70px] h-[70px]">
@@ -810,22 +953,24 @@ const Rendezvous = () => {
                                                     <Phone className="h-4 w-4" />
                                                     <span className="text-sm">Appel</span>
                                                 </Button>
-                                                <div className="flex gap-1 flex-1 sm:flex-none" onClick={(e) => e.stopPropagation()}>
-                                                    <Button
-                                                        onClick={() => handleUpdateStatus(appt.id, 'coming')}
-                                                        size="icon" variant="outline" className="h-10 w-10 text-emerald-600 hover:text-white hover:bg-emerald-600 border-emerald-100"
-                                                        title="Vient"
-                                                    >
-                                                        <CheckCircle2 className="h-5 w-5" />
-                                                    </Button>
-                                                    <Button
-                                                        onClick={() => handleUpdateStatus(appt.id, 'denied')}
-                                                        size="icon" variant="outline" className="h-10 w-10 text-rose-600 hover:text-white hover:bg-rose-600 border-rose-100"
-                                                        title="Refusé"
-                                                    >
-                                                        <XCircle className="h-5 w-5" />
-                                                    </Button>
-                                                </div>
+                                                {(appt.status === 'scheduled' || appt.status === 'confirmed') && (
+                                                    <div className="flex gap-1 flex-1 sm:flex-none" onClick={(e) => e.stopPropagation()}>
+                                                        <Button
+                                                            onClick={() => handleUpdateStatus(appt.id, 'coming')}
+                                                            size="icon" variant="outline" className="h-10 w-10 text-emerald-600 hover:text-white hover:bg-emerald-600 border-emerald-100"
+                                                            title="Vient"
+                                                        >
+                                                            <CheckCircle2 className="h-5 w-5" />
+                                                        </Button>
+                                                        <Button
+                                                            onClick={() => handleUpdateStatus(appt.id, 'denied')}
+                                                            size="icon" variant="outline" className="h-10 w-10 text-rose-600 hover:text-white hover:bg-rose-600 border-rose-100"
+                                                            title="Refusé"
+                                                        >
+                                                            <XCircle className="h-5 w-5" />
+                                                        </Button>
+                                                    </div>
+                                                )}
                                             </div>
                                         </CardContent>
                                     </Card>
@@ -1378,8 +1523,12 @@ const Rendezvous = () => {
                             </div>
 
                             {/* Main Calendar View */}
-                            <Card className="flex-1 border-none shadow-premium overflow-hidden lg:order-1 min-w-0">
-                                <CardContent className="p-0">
+                            <Card
+                                className={`flex-1 border-none shadow-premium overflow-hidden lg:order-1 min-w-0 transition-all duration-300 ${isCalendarFullscreen ? 'fixed inset-0 z-50 rounded-none m-0 bg-background' : ''
+                                    }`}
+                                onDoubleClick={() => setIsCalendarFullscreen(prev => !prev)}
+                            >
+                                <CardContent className="p-0 h-full flex flex-col">
                                     <div className="p-6 border-b bg-muted/20 flex flex-col sm:flex-row items-center justify-between gap-4">
                                         <div>
                                             <h3 className="font-black italic text-xl text-primary">Vue Equipe</h3>
@@ -1414,19 +1563,23 @@ const Rendezvous = () => {
                                         ))}
                                     </div>
 
-                                    <div className="p-0 sm:p-2">
-                                        <ScrollArea className="h-[650px] sm:h-[600px] px-2 sm:px-4">
+                                    <div className="p-0 sm:p-2 flex-1">
+                                        <ScrollArea className={`${isCalendarFullscreen ? 'h-[calc(100vh-160px)]' : 'h-[650px] sm:h-[600px]'} px-2 sm:px-4`}>
                                             <div className="relative min-h-[1050px] min-w-0">
 
                                                 {/* Time Background Grid Lines */}
                                                 <div className="absolute inset-0 pt-10 pointer-events-none">
-                                                    {['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00'].map((t, idx) => (
+                                                    {[
+                                                        '07:00', '07:30', '08:00', '08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '12:00', '12:30',
+                                                        '13:00', '13:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00', '17:30', '18:00', '18:30',
+                                                        '19:00', '19:30', '20:00', '20:30', '21:00', '21:30', '22:00'
+                                                    ].map((t, idx) => (
                                                         <div
                                                             key={t}
-                                                            className="absolute left-0 w-full border-t border-muted/30 flex items-start"
-                                                            style={{ top: `${idx * 80 + 50}px` }}
+                                                            className={`absolute left-0 w-full border-t flex items-start ${t.endsWith(':00') ? 'border-muted' : 'border-muted/20 border-dashed'}`}
+                                                            style={{ top: `${idx * 60 + 50}px` }}
                                                         >
-                                                            <span className="text-[9px] font-black text-muted-foreground/30 -mt-2.5 bg-background pr-2 z-10 uppercase tracking-tighter">
+                                                            <span className={`text-[9px] font-black -mt-2.5 bg-background pr-2 z-10 uppercase tracking-tighter ${t.endsWith(':00') ? 'text-muted-foreground/50' : 'text-muted-foreground/20'}`}>
                                                                 {t}
                                                             </span>
                                                         </div>
@@ -1438,7 +1591,7 @@ const Rendezvous = () => {
                                                     <div
                                                         className="absolute left-0 right-0 border-t-2 border-rose-500/50 z-30 pointer-events-none flex items-center"
                                                         style={{
-                                                            top: `${(new Date().getHours() - 8) * 80 + (new Date().getMinutes() / 60) * 80 + 50}px`,
+                                                            top: `${(new Date().getHours() - 7) * 120 + (new Date().getMinutes() / 60) * 120 + 50}px`,
                                                             transition: 'top 60s linear'
                                                         }}
                                                     >
@@ -1452,7 +1605,7 @@ const Rendezvous = () => {
                                                     {doctors
                                                         .filter(d => selectedDoctorMobile === 'all' || d.id === selectedDoctorMobile)
                                                         .map(doctor => (
-                                                            <div key={doctor.id} className="relative min-h-[1000px] rounded-2xl bg-muted/5 border border-primary/5 overflow-hidden group/col">
+                                                            <div key={doctor.id} className="relative min-h-[2000px] rounded-2xl bg-muted/5 border border-primary/5 overflow-hidden group/col">
                                                                 {/* Column Sticky Header */}
                                                                 <div className="sticky top-0 z-10 bg-white/80 dark:bg-black/40 backdrop-blur-md p-3 border-b border-primary/5 text-center group-hover/col:bg-primary/5 transition-colors">
                                                                     <p className="text-[10px] text-primary font-black uppercase tracking-[0.2em] mb-0.5 opacity-60">Cabinet</p>
@@ -1463,7 +1616,10 @@ const Rendezvous = () => {
                                                                 </div>
 
                                                                 {/* Appointments for this doctor */}
-                                                                <div className="relative h-full pt-10">
+                                                                <div
+                                                                    className="relative h-full pt-10 cursor-crosshair"
+                                                                    onClick={(e) => handleEmptySlotClick(e, doctor.id)}
+                                                                >
                                                                     {(() => {
                                                                         const dayStart = startOfDay(newApptDate || new Date()).getTime();
                                                                         const filteredAppts = parsedAppointments.filter(a =>
@@ -1484,12 +1640,18 @@ const Rendezvous = () => {
                                                                             const date = parseISO(appt.appointment_at);
                                                                             const h = date.getHours();
                                                                             const m = date.getMinutes();
-                                                                            const offset = (h - 8) * 80 + (m / 60) * 80;
+                                                                            const offset = (h - 7) * 120 + (m / 60) * 120;
 
                                                                             const group = hourGroups[h] || [];
                                                                             const index = group.findIndex(a => a.id === appt.id);
                                                                             const total = group.length;
                                                                             const isOverlapping = total > 1;
+
+                                                                            // Extract duration from notes
+                                                                            const durMatch = appt.notes?.match(/\[DUR:(\d+)\]/);
+                                                                            const duration = durMatch ? parseInt(durMatch[1]) : 30;
+                                                                            const displayNotes = appt.notes?.replace(/\[DUR:\d+\]\s*/, '') || 'Sans note';
+                                                                            const cardHeight = (duration / 60) * 120 - 10;
 
                                                                             return (
                                                                                 <div
@@ -1505,7 +1667,7 @@ const Rendezvous = () => {
                                                                                                 appt.status === 'attended' ? 'border-l-blue-500 shadow-blue-500/10 opacity-75' :
                                                                                                     'border-l-primary shadow-primary/10'}
                                                                                     `}
-                                                                                    style={{ top: `${offset}px`, height: '75px' }}
+                                                                                    style={{ top: `${offset}px`, height: `${cardHeight}px` }}
                                                                                     onClick={() => openEditModal(appt)}
                                                                                 >
                                                                                     <div className="flex justify-between items-start mb-1">
@@ -1519,7 +1681,7 @@ const Rendezvous = () => {
                                                                                     </p>
                                                                                     <p className="text-[9px] text-muted-foreground font-bold mt-0.5 truncate flex items-center gap-1">
                                                                                         <span className="w-1 h-1 rounded-full bg-muted-foreground/30" />
-                                                                                        {appt.notes || 'Sans note'}
+                                                                                        {displayNotes}
                                                                                     </p>
                                                                                 </div>
                                                                             );
@@ -1545,6 +1707,10 @@ const Rendezvous = () => {
                 if (!open) {
                     setEditingApptId(null);
                     setNewApptNotes('');
+                    setApptSearchQuery('');
+                    setIsNewPatientForAppt(false);
+                    setApptNewPatientName('');
+                    setApptNewPatientPhone('');
                 }
             }}>
                 <DialogContent className="sm:rounded-2xl max-w-md">
@@ -1555,36 +1721,98 @@ const Rendezvous = () => {
                     </DialogHeader>
 
                     <div className="space-y-4 py-4">
-                        {!selectedClient && (
-                            <div className="space-y-2">
-                                <label className="text-xs font-black uppercase text-muted-foreground">Rechercher</label>
-                                <div className="relative">
-                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                                    <Input
-                                        placeholder="Nom ou téléphone..."
-                                        className="pl-10 h-11 rounded-xl"
-                                        onChange={(e) => {
-                                            const found = uniqueClients.find(c => c.client_name.toLowerCase() === e.target.value.toLowerCase() || c.phone === e.target.value);
-                                            if (found) setSelectedClient({ phone: found.phone, name: found.client_name });
-                                        }}
-                                    />
-                                </div>
-                                <p className="text-[10px] text-muted-foreground italic">Sélectionnez un patient existant en tapant son nom exact ou son numéro.</p>
+                        {!editingApptId && (
+                            <div className="flex gap-2 p-1 bg-muted rounded-xl mb-4">
+                                <Button
+                                    variant={!isNewPatientForAppt ? "secondary" : "ghost"}
+                                    className="flex-1 h-9 rounded-lg text-xs font-bold transition-all"
+                                    onClick={() => setIsNewPatientForAppt(false)}
+                                >
+                                    Patient Existant
+                                </Button>
+                                <Button
+                                    variant={isNewPatientForAppt ? "secondary" : "ghost"}
+                                    className="flex-1 h-9 rounded-lg text-xs font-bold transition-all"
+                                    onClick={() => setIsNewPatientForAppt(true)}
+                                >
+                                    Nouveau Patient
+                                </Button>
                             </div>
                         )}
 
-                        {selectedClient && (
-                            <div className="bg-muted/30 p-3 rounded-xl border border-dashed text-center relative group">
-                                <Button
-                                    variant="ghost" size="icon"
-                                    className="absolute right-2 top-2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                                    onClick={() => setSelectedClient(null)}
-                                >
-                                    <XCircle className="h-4 w-4" />
-                                </Button>
-                                <p className="text-xs text-muted-foreground uppercase font-bold">Patient</p>
-                                <p className="text-lg font-black text-primary">{selectedClient.name}</p>
-                                <p className="text-xs text-muted-foreground">{selectedClient.phone}</p>
+                        {!isNewPatientForAppt ? (
+                            <div className="space-y-4">
+                                {!selectedClient ? (
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-black uppercase text-muted-foreground">Rechercher</label>
+                                        <div className="relative">
+                                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                            <Input
+                                                placeholder="Nom ou téléphone..."
+                                                className="pl-10 h-11 rounded-xl"
+                                                value={apptSearchQuery}
+                                                onChange={(e) => setApptSearchQuery(e.target.value)}
+                                            />
+                                            {filteredSuggestions.length > 0 && (
+                                                <div className="absolute z-50 w-full mt-1 bg-background border rounded-xl shadow-lg overflow-hidden animate-in fade-in slide-in-from-top-1">
+                                                    {filteredSuggestions.map(c => (
+                                                        <button
+                                                            key={c.id}
+                                                            className="w-full text-left px-4 py-2 hover:bg-muted transition-colors border-b last:border-b-0 space-y-0.5"
+                                                            onClick={() => {
+                                                                setSelectedClient({ phone: c.phone, name: c.client_name });
+                                                                setApptSearchQuery('');
+                                                            }}
+                                                        >
+                                                            <p className="text-sm font-bold text-foreground">{c.client_name}</p>
+                                                            <p className="text-[10px] text-muted-foreground">{c.phone}</p>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <p className="text-[10px] text-muted-foreground italic">Sélectionnez un patient existant pour pré-remplir ses coordonnées.</p>
+                                    </div>
+                                ) : (
+                                    <div className="bg-muted/30 p-3 rounded-xl border border-dashed text-center relative group">
+                                        <div className="mr-auto text-left">
+                                            <p className="text-xs font-black uppercase text-muted-foreground/60 mb-1">Patient Sélectionné</p>
+                                            <p className="font-bold">{selectedClient.name}</p>
+                                            <p className="text-xs text-muted-foreground">{selectedClient.phone}</p>
+                                        </div>
+                                        {!editingApptId && (
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="absolute top-2 right-2 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                onClick={() => setSelectedClient(null)}
+                                            >
+                                                <XCircle className="h-4 w-4 text-muted-foreground" />
+                                            </Button>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        ) : (
+                            <div className="space-y-4 animate-in fade-in slide-in-from-top-1">
+                                <div className="space-y-2">
+                                    <label className="text-xs font-black uppercase text-muted-foreground">Nom du Patient</label>
+                                    <Input
+                                        placeholder="Nom complet"
+                                        value={apptNewPatientName}
+                                        onChange={e => setApptNewPatientName(e.target.value)}
+                                        className="h-11 rounded-xl"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-xs font-black uppercase text-muted-foreground">Téléphone</label>
+                                    <Input
+                                        placeholder="05XX XX XX XX"
+                                        value={apptNewPatientPhone}
+                                        onChange={e => setApptNewPatientPhone(e.target.value)}
+                                        className="h-11 rounded-xl"
+                                    />
+                                </div>
                             </div>
                         )}
 
@@ -1605,20 +1833,39 @@ const Rendezvous = () => {
                             </div>
                             <div className="space-y-2">
                                 <label className="text-xs font-black uppercase text-muted-foreground">Heure</label>
-                                <Input type="time" min="08:00" max="18:00" value={newApptTime} onChange={(e) => setNewApptTime(e.target.value)} className="h-11 rounded-xl" />
+                                <Input type="time" min="07:00" max="22:00" value={newApptTime} onChange={(e) => setNewApptTime(e.target.value)} className="h-11 rounded-xl" />
                             </div>
                         </div>
 
-                        <div className="space-y-2">
-                            <label className="text-xs font-black uppercase text-muted-foreground">Equipe</label>
-                            <Select value={newApptDoctor} onValueChange={setNewApptDoctor}>
-                                <SelectTrigger className="h-11 rounded-xl"><SelectValue placeholder="Choisir l'équipe" /></SelectTrigger>
-                                <SelectContent>
-                                    {doctors.map(d => (
-                                        <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <label className="text-xs font-black uppercase text-muted-foreground">Equipe</label>
+                                <Select value={newApptDoctor} onValueChange={setNewApptDoctor}>
+                                    <SelectTrigger className="h-11 rounded-xl"><SelectValue placeholder="Equipe" /></SelectTrigger>
+                                    <SelectContent>
+                                        {doctors.map(d => (
+                                            <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-xs font-black uppercase text-muted-foreground">Durée</label>
+                                <Select value={newApptDuration.toString()} onValueChange={(v) => setNewApptDuration(parseInt(v))}>
+                                    <SelectTrigger className="h-11 rounded-xl"><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="15">15 min</SelectItem>
+                                        <SelectItem value="30">30 min</SelectItem>
+                                        <SelectItem value="45">45 min</SelectItem>
+                                        <SelectItem value="60">1 heure</SelectItem>
+                                        <SelectItem value="90">1h 30m</SelectItem>
+                                        <SelectItem value="120">2 heures</SelectItem>
+                                        <SelectItem value="150">2h 30m</SelectItem>
+                                        <SelectItem value="180">3 heures</SelectItem>
+                                        <SelectItem value="240">4 heures</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
                         </div>
 
                         <div className="space-y-2">

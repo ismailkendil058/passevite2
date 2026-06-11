@@ -20,9 +20,6 @@ interface QueueData {
 
 const Client = () => {
   const [phone, setPhone] = useState('');
-  const [manualState, setManualState] = useState('N');
-  const [manualDoctor, setManualDoctor] = useState('');
-  const [manualNumber, setManualNumber] = useState('');
   const [queueData, setQueueData] = useState<QueueData | null>(null);
   const [loading, setLoading] = useState(false);
   const [doctors, setDoctors] = useState<{ id: string; name: string; initial: string }[]>([]);
@@ -36,21 +33,11 @@ const Client = () => {
   const lookupByPhone = async () => {
     if (!phone.trim()) return;
     setLoading(true);
-    await findClient('phone', phone.trim());
+    await findClient(phone.trim());
     setLoading(false);
   };
 
-  const lookupById = async () => {
-    if (!manualDoctor || !manualNumber) return;
-    const doctor = doctors.find(d => d.initial === manualDoctor);
-    if (!doctor) return;
-    const clientId = `${manualState}${manualNumber}${manualDoctor}`;
-    setLoading(true);
-    await findClient('id', clientId);
-    setLoading(false);
-  };
-
-  const findClient = async (mode: 'phone' | 'id', value: string) => {
+  const findClient = async (phoneValue: string) => {
     const { data: session } = await supabase
       .from('sessions')
       .select('id')
@@ -85,12 +72,7 @@ const Client = () => {
       return a.state_number - b.state_number;
     });
 
-    let entry;
-    if (mode === 'phone') {
-      entry = sorted.find(e => e.phone === value);
-    } else {
-      entry = sorted.find(e => e.client_id === value);
-    }
+    const entry = sorted.find(e => e.phone === phoneValue);
 
     if (!entry) {
       setQueueData({ client_id: '', state: '', position: 0, peopleBefore: 0, doctor_name: '', found: false });
@@ -129,102 +111,104 @@ const Client = () => {
           table: 'queue_entries'
         },
         (payload) => {
-          // Only trigger if a relevant record changed or something was deleted/inserted
-          // which could affect the position.
-          if (phone.trim()) findClient('phone', phone.trim());
-          else if (manualDoctor && manualNumber) {
-            const clientId = `${manualState}${manualNumber}${manualDoctor}`;
-            findClient('id', clientId);
-          }
+          if (phone.trim()) findClient(phone.trim());
         }
       )
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [queueData?.found, phone, manualState, manualDoctor, manualNumber]);
+  }, [queueData?.found, phone]);
 
   const stateLabels: Record<string, string> = { U: 'Urgence', N: 'Nouveau', R: 'Rendez-vous' };
 
   return (
-    <div className="h-[100dvh] overflow-hidden bg-background flex flex-col">
-      <header className="p-3 sm:p-4 text-center border-b gpu">
-        <h1 className="text-xl sm:text-2xl font-bold text-foreground italic animate-fade-in gpu">PasseVite</h1>
-        <p className="text-[10px] tracking-[0.2em] text-muted-foreground -mt-1 uppercase animate-fade-in gpu">le soin qui passe</p>
-      </header>
+    <div className="min-h-screen bg-white flex flex-col items-center justify-center p-6 relative overflow-hidden">
+      {/* Decorative Background Elements */}
+      <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/5 rounded-full blur-[100px] animate-fade-in gpu" />
+      <div
+        className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-primary/10 rounded-full blur-[100px] animate-fade-in gpu"
+        style={{ animationDelay: '0.3s' }}
+      />
 
-      {!queueData?.found && (
-        <div className="flex-1 p-3 sm:p-4 flex items-center justify-center animate-slide-up gpu">
-          <Card className="w-full max-w-md border-0 shadow-lg gpu">
-            <CardHeader className="pb-2 sm:pb-4">
-              <CardTitle className="text-base sm:text-lg text-center font-bold tracking-tight">Trouver votre position</CardTitle>
+      <div className="text-center mb-10 relative z-10 animate-fade-in gpu text-center flex flex-col items-center">
+        <div className="inline-block mb-4 p-2 rounded-2xl bg-white shadow-xl shadow-primary/10 animate-float gpu border border-primary/5">
+          <img src="/VitalWeb.png" alt="PasseVite Logo" className="h-10 w-10 object-contain" />
+        </div>
+        <h1 className="text-4xl md:text-5xl font-black text-primary tracking-tighter italic">
+          PasseVite
+        </h1>
+        <p className="text-[10px] md:text-sm tracking-[0.5em] text-muted-foreground mt-2 font-medium uppercase text-center">
+          Le soin qui passe vite
+        </p>
+        <div className="h-1 w-12 bg-primary/20 mx-auto mt-6 rounded-full" />
+      </div>
+
+      {!queueData?.found && !loading && (
+        <div className="w-full max-w-md relative z-10 animate-slide-up gpu">
+          <Card className="border border-white/40 shadow-xl shadow-primary/5 bg-white/50 backdrop-blur-sm overflow-hidden rounded-3xl">
+            <CardHeader className="pb-2 text-center">
+              <CardTitle className="text-lg font-bold tracking-tight text-foreground">Trouver votre position</CardTitle>
+              <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Informations de file d'attente</p>
             </CardHeader>
-            <CardContent className="px-4 sm:px-6 pb-4 sm:pb-6">
-              <Tabs defaultValue="phone" className="w-full">
-                <TabsList className="grid w-full grid-cols-2 bg-muted/50 p-1 rounded-xl">
-                  <TabsTrigger value="phone" className="text-xs sm:text-sm rounded-lg data-[state=active]:shadow-sm">Par téléphone</TabsTrigger>
-                  <TabsTrigger value="id" className="text-xs sm:text-sm rounded-lg data-[state=active]:shadow-sm">Par identifiant</TabsTrigger>
-                </TabsList>
-                <TabsContent value="phone" className="space-y-3 sm:space-y-4 mt-3 sm:mt-4">
+            <CardContent className="p-6 space-y-4">
+              <div className="space-y-4">
+                <div className="relative group">
+                  <div className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-primary/40 group-focus-within:text-primary transition-colors">
+                    <Search className="h-full w-full" />
+                  </div>
                   <Input
                     placeholder="Votre numéro de téléphone"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     type="tel"
-                    className="h-11 sm:h-12"
+                    className="h-14 pl-12 rounded-2xl border-primary/10 bg-white/50 focus:ring-primary/20 transition-all font-medium text-lg"
                   />
-                  <Button onClick={lookupByPhone} className="w-full h-11 sm:h-12" disabled={loading}>
-                    <Search className="h-4 w-4 mr-2" /> Rechercher
-                  </Button>
-                </TabsContent>
-                <TabsContent value="id" className="space-y-3 sm:space-y-4 mt-3 sm:mt-4">
-                  <Select value={manualState} onValueChange={setManualState}>
-                    <SelectTrigger className="h-11 sm:h-12"><SelectValue placeholder="État" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="U">U - Urgence</SelectItem>
-                      <SelectItem value="N">N - Nouveau</SelectItem>
-                      <SelectItem value="R">R - Rendez-vous</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Select value={manualDoctor} onValueChange={setManualDoctor}>
-                    <SelectTrigger className="h-11 sm:h-12"><SelectValue placeholder="Initiale équipe" /></SelectTrigger>
-                    <SelectContent>
-                      {doctors.map(d => (
-                        <SelectItem key={d.initial} value={d.initial}>{d.initial} - {d.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Input
-                    placeholder="Numéro"
-                    value={manualNumber}
-                    onChange={(e) => setManualNumber(e.target.value)}
-                    type="number"
-                    className="h-11 sm:h-12"
-                  />
-                  <Button onClick={lookupById} className="w-full h-11 sm:h-12" disabled={loading}>
-                    <Search className="h-4 w-4 mr-2" /> Rechercher
-                  </Button>
-                </TabsContent>
-              </Tabs>
+                </div>
+                <Button
+                  onClick={lookupByPhone}
+                  className="w-full h-14 rounded-2xl text-lg font-bold shadow-lg shadow-primary/20 active:scale-95 transition-all"
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <div className="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full" />
+                  ) : (
+                    "Rechercher ma position"
+                  )}
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </div>
       )}
 
-      {queueData && !queueData.found && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <Card className="w-full max-w-sm border-0 shadow-xl">
-            <CardContent className="p-6 sm:p-8 text-center space-y-4">
+      {loading && (
+        <div className="relative z-10 animate-fade-in py-12 flex flex-col items-center gap-4">
+          <div className="w-12 h-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
+          <p className="text-xs font-bold text-primary uppercase tracking-[0.2em]">Recherche en cours...</p>
+        </div>
+      )}
+
+      {queueData && !queueData.found && !loading && (
+        <div className="fixed inset-0 bg-white/80 backdrop-blur-md flex items-center justify-center z-50 p-6 animate-fade-in">
+          <Card className="w-full max-w-sm border-0 shadow-2xl rounded-3xl overflow-hidden bg-white">
+            <div className="h-2 w-full bg-rose-500" />
+            <CardContent className="p-8 text-center space-y-6">
               <div className="flex justify-center">
-                <div className="h-16 w-16 rounded-full bg-red-100 flex items-center justify-center">
-                  <AlertCircle className="h-8 w-8 text-red-600" />
+                <div className="h-20 w-20 rounded-3xl bg-rose-50 border border-rose-100 flex items-center justify-center animate-bounce-subtle">
+                  <AlertCircle className="h-10 w-10 text-rose-500" />
                 </div>
               </div>
               <div className="space-y-2">
-                <p className="text-lg sm:text-xl font-semibold text-red-600">Aucun patient trouvé</p>
-                <p className="text-sm text-muted-foreground">Vérifiez vos informations et réessayez.</p>
-                <p className="text-xs text-muted-foreground">Assurez-vous que votre numéro de téléphone ou votre identifiant est correct.</p>
+                <p className="text-2xl font-black text-foreground tracking-tight italic">Patient introuvable</p>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  Aucune entrée active n'a été trouvée pour ce numéro dans la séance actuelle.
+                </p>
               </div>
-              <Button variant="destructive" onClick={() => setQueueData(null)} className="mt-2">
+              <Button
+                variant="outline"
+                onClick={() => setQueueData(null)}
+                className="w-full h-12 rounded-xl border-2 font-bold uppercase tracking-widest text-xs hover:bg-rose-50 hover:text-rose-600 hover:border-rose-100 transition-all active:scale-95"
+              >
                 Réessayer
               </Button>
             </CardContent>
@@ -233,45 +217,65 @@ const Client = () => {
       )}
 
       {queueData?.found && (
-        <div className="flex-1 p-3 sm:p-4 flex items-center justify-center animate-slide-up gpu">
-          <Card className="w-full max-w-md border-0 shadow-lg gpu overflow-hidden">
-            <CardContent className="p-6 sm:p-8 text-center space-y-4 sm:space-y-6 relative">
-              {/* Decorative accent */}
-              <div className="absolute top-0 left-0 w-full h-1.5 bg-primary/20" />
-              <div className="absolute top-0 left-0 h-1.5 bg-primary animate-[shimmer_2s_infinite] w-full" style={{ background: 'linear-gradient(90deg, transparent, hsl(var(--primary)), transparent)' }} />
+        <div className="w-full max-w-md relative z-10 animate-slide-up gpu">
+          <Card className="border border-white/40 shadow-2xl shadow-primary/10 bg-white/60 backdrop-blur-lg rounded-[2.5rem] overflow-hidden">
+            <CardContent className="p-8 sm:p-10 text-center space-y-8 relative">
+              <div className="absolute top-0 left-0 w-full h-2 bg-primary/10" />
+              <div className="absolute top-0 left-0 h-2 bg-primary animate-[shimmer_2s_infinite] w-full" style={{ background: 'linear-gradient(90deg, transparent, hsl(var(--primary)), transparent)' }} />
 
-              <div className="space-y-2">
+              <div className="space-y-3">
                 {queueData.patient_name && (
-                  <h2 className="text-2xl sm:text-3xl font-black text-foreground tracking-tight italic">{queueData.patient_name}</h2>
+                  <h2 className="text-3xl sm:text-4xl font-black text-foreground tracking-tighter italic animate-fade-in">{queueData.patient_name}</h2>
                 )}
                 <div className="space-y-1">
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.3em]">Votre identifiant</p>
-                  <p className="text-5xl sm:text-7xl font-black text-primary tracking-tighter italic animate-pulse-subtle">{queueData.client_id}</p>
+                  <p className="text-[10px] sm:text-xs font-black text-muted-foreground/60 uppercase tracking-[0.4em]">Votre identifiant</p>
+                  <p className="text-7xl sm:text-8xl font-black text-primary tracking-tighter italic animate-pulse-subtle">{queueData.client_id}</p>
                 </div>
               </div>
-              <Badge variant="outline" className="text-xs sm:text-sm px-4 py-1.5 font-bold border-primary/20 text-primary bg-primary/5 uppercase tracking-widest">{stateLabels[queueData.state] || queueData.state}</Badge>
-              <div className="bg-primary/[0.03] rounded-[2rem] p-6 sm:p-8 border border-primary/5 shadow-inner">
-                <div className="flex items-center justify-center gap-3 mb-2 animate-float gpu">
-                  <Users className="h-6 w-6 text-primary" />
-                  <span className="text-4xl sm:text-5xl font-black text-foreground tracking-tighter tabular-nums">{queueData.peopleBefore}</span>
+
+              <div className="inline-flex items-center gap-2 px-6 py-2 rounded-full border border-primary/10 bg-primary/5">
+                <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
+                <span className="text-xs font-black text-primary uppercase tracking-widest italic">{stateLabels[queueData.state] || queueData.state}</span>
+              </div>
+
+              <div className="bg-white/40 rounded-[2.5rem] p-8 sm:p-10 border border-white shadow-2xl shadow-primary/5 relative group">
+                <div className="flex items-center justify-center gap-4 mb-3 animate-float gpu">
+                  <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-3xl bg-primary/5 flex items-center justify-center group-hover:bg-primary group-hover:scale-110 group-hover:rotate-3 transition-all duration-500 shadow-lg shadow-primary/5">
+                    <Users className="h-8 w-8 sm:h-10 sm:w-10 text-primary group-hover:text-white transition-colors" />
+                  </div>
+                  <span className="text-6xl sm:text-7xl font-black text-foreground tracking-tighter tabular-nums">{queueData.peopleBefore}</span>
                 </div>
-                <p className="text-xs sm:text-sm font-bold text-muted-foreground uppercase tracking-widest opacity-70">
+                <p className="text-xs sm:text-sm font-black text-muted-foreground/40 uppercase tracking-[0.2em]">
                   {queueData.peopleBefore === 0
-                    ? 'C\'est votre tour !'
+                    ? "C'est votre tour !"
                     : `personne${queueData.peopleBefore > 1 ? 's' : ''} avant vous`}
                 </p>
               </div>
-              <div className="flex items-center justify-center gap-2 text-muted-foreground py-2 border-y border-dashed border-muted-foreground/10">
-                <Clock className="h-4 w-4" />
-                <span className="text-xs sm:text-sm font-medium tracking-wide">{queueData.doctor_name}</span>
+
+              <div className="flex items-center justify-center gap-3 text-muted-foreground p-4 bg-muted/20 rounded-2xl border border-muted/10">
+                <div className="p-2 rounded-lg bg-white/50 shadow-sm">
+                  <Clock className="h-4 w-4 text-primary" />
+                </div>
+                <span className="text-xs sm:text-sm font-bold tracking-wide uppercase">{queueData.doctor_name}</span>
               </div>
-              <Button variant="ghost" onClick={() => setQueueData(null)} className="mt-2 sm:mt-4 text-xs font-bold uppercase tracking-widest text-muted-foreground hover:text-primary">
+
+              <Button
+                variant="ghost"
+                onClick={() => setQueueData(null)}
+                className="mt-4 text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground/40 hover:text-primary hover:bg-primary/5 rounded-full px-8 h-10 transition-all active:scale-95"
+              >
                 Nouvelle recherche
               </Button>
             </CardContent>
           </Card>
         </div>
       )}
+
+      <p className="mt-12 text-[8px] sm:text-[10px] text-muted-foreground/50 uppercase tracking-[0.3em] relative z-10 animate-fade-in text-center flex items-center gap-2">
+        <span className="h-px w-8 bg-muted-foreground/20" />
+        {new Date().getFullYear()} PasseVite Excellence &bull; Patient Portal
+        <span className="h-px w-8 bg-muted-foreground/20" />
+      </p>
     </div>
   );
 };

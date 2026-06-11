@@ -50,6 +50,7 @@ const MedecinDashboard = () => {
 
     // CALENDAR STATE
     const [calendarDate, setCalendarDate] = useState<Date | undefined>(new Date());
+    const [isCalendarFullscreen, setIsCalendarFullscreen] = useState(false);
     const parsedAppointments = useMemo(() => {
         return appointments.map(a => ({
             ...a,
@@ -140,6 +141,15 @@ const MedecinDashboard = () => {
         };
     }, [doctorInfo, fetchDashboardData]);
 
+    // Escape key to exit fullscreen calendar
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape' && isCalendarFullscreen) setIsCalendarFullscreen(false);
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isCalendarFullscreen]);
+
     const handleSignOut = async () => {
         await signOut();
         toast.success('Déconnecté avec succès');
@@ -220,7 +230,7 @@ const MedecinDashboard = () => {
                 </div>
             </header>
 
-            <main className="p-4 lg:p-6 flex-1 space-y-6 max-w-7xl mx-auto w-full">
+            <main className="p-4 lg:p-6 flex-1 space-y-6 w-full">
                 <Tabs defaultValue="ordonnances" className="w-full">
                     <TabsList className="grid w-full grid-cols-4 bg-muted/50 p-1 rounded-xl h-12">
                         <TabsTrigger value="ordonnances" className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm">
@@ -305,8 +315,12 @@ const MedecinDashboard = () => {
                     {/* CALENDAR CONTENT */}
                     <TabsContent value="calendar" className="mt-6 animate-in fade-in slide-in-from-bottom-2">
                         <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6">
-                            <Card className="border-none shadow-premium bg-white rounded-3xl overflow-hidden">
-                                <CardContent className="p-0">
+                            <Card
+                                className={`border-none shadow-premium bg-white rounded-3xl overflow-hidden transition-all duration-300 ${isCalendarFullscreen ? 'fixed inset-0 z-50 rounded-none m-0' : ''
+                                    }`}
+                                onDoubleClick={() => setIsCalendarFullscreen(prev => !prev)}
+                            >
+                                <CardContent className="p-0 h-full flex flex-col">
                                     <div className="p-6 border-b bg-slate-50/50 flex flex-col sm:flex-row items-center justify-between gap-4">
                                         <div>
                                             <h3 className="font-black italic text-xl text-primary">Emploi du Temps</h3>
@@ -317,18 +331,22 @@ const MedecinDashboard = () => {
                                         </div>
                                     </div>
 
-                                    <div className="p-4 sm:p-8">
-                                        <ScrollArea className="h-[600px] pr-4">
+                                    <div className="p-4 sm:p-8 flex-1">
+                                        <ScrollArea className={`${isCalendarFullscreen ? 'h-[calc(100vh-100px)]' : 'h-[600px]'} pr-4`}>
                                             <div className="grid grid-cols-[60px_1fr] gap-6">
                                                 {/* Time labels */}
-                                                <div className="space-y-[80px] pt-10 text-[10px] font-black text-slate-300 text-right pr-4 border-r border-slate-100">
-                                                    {['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00'].map(t => (
-                                                        <div key={t} className="h-0 flex items-center justify-end">{t}</div>
+                                                <div className="space-y-[60px] pt-10 text-[10px] font-black text-slate-300 text-right pr-4 border-r border-slate-100">
+                                                    {[
+                                                        '07:00', '07:30', '08:00', '08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '12:00', '12:30',
+                                                        '13:00', '13:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00', '17:30', '18:00', '18:30',
+                                                        '19:00', '19:30', '20:00', '20:30', '21:00', '21:30', '22:00'
+                                                    ].map(t => (
+                                                        <div key={t} className={`h-0 flex items-center justify-end ${t.endsWith(':00') ? 'text-slate-400 font-black' : 'text-slate-300 font-medium'}`}>{t}</div>
                                                     ))}
                                                 </div>
 
                                                 {/* Single Column for current Doctor */}
-                                                <div className="relative bg-slate-50/30 rounded-3xl min-h-[1000px] border border-dashed border-slate-200">
+                                                <div className="relative bg-slate-50/30 rounded-3xl min-h-[2000px] border border-dashed border-slate-200">
                                                     <div className="sticky top-0 z-10 bg-white/80 backdrop-blur-md p-4 border-b text-center font-black text-xs text-primary uppercase tracking-[0.2em] rounded-t-3xl">
                                                         Planning {doctorInfo?.name}
                                                     </div>
@@ -340,7 +358,13 @@ const MedecinDashboard = () => {
                                                             const date = parseISO(appt.appointment_at);
                                                             const hours = date.getHours();
                                                             const minutes = date.getMinutes();
-                                                            const offset = (hours - 8) * 80 + (minutes / 60) * 80 + 64; // Adjusted offset for header
+                                                            const offset = (hours - 7) * 120 + (minutes / 60) * 120 + 64; // Adjusted offset for header
+
+                                                            // Extract duration from notes
+                                                            const durMatch = appt.notes?.match(/\[DUR:(\d+)\]/);
+                                                            const duration = durMatch ? parseInt(durMatch[1]) : 30;
+                                                            const displayNotes = appt.notes?.replace(/\[DUR:\d+\]\s*/, '') || 'Sans note';
+                                                            const cardHeight = (duration / 60) * 120 - 10;
 
                                                             return (
                                                                 <Card
@@ -349,7 +373,7 @@ const MedecinDashboard = () => {
                                                                         "absolute left-4 right-4 shadow-xl border-l-4 p-4 rounded-2xl cursor-pointer hover:scale-[1.02] transition-all z-20 group",
                                                                         appt.status === 'completed' ? 'border-l-emerald-500 bg-white' : 'border-l-primary bg-white'
                                                                     )}
-                                                                    style={{ top: `${offset}px`, height: '80px' }}
+                                                                    style={{ top: `${offset}px`, height: `${cardHeight}px` }}
                                                                     onClick={() => { setSelectedPatient(patients.find(p => p.phone === appt.client_phone)); setIsPatientDialogOpen(true); }}
                                                                 >
                                                                     <div className="flex justify-between items-start">
@@ -363,10 +387,10 @@ const MedecinDashboard = () => {
                                                                             {appt.status.toUpperCase()}
                                                                         </Badge>
                                                                     </div>
+                                                                    <p className="text-[10px] text-slate-400 font-bold mt-1 line-clamp-1">{displayNotes}</p>
                                                                 </Card>
                                                             );
-                                                        })
-                                                    }
+                                                        })}
                                                 </div>
                                             </div>
                                         </ScrollArea>
@@ -409,10 +433,10 @@ const MedecinDashboard = () => {
                                 </Card>
                             </div>
                         </div>
-                    </TabsContent>
+                    </TabsContent >
 
                     {/* PATIENTS CONTENT */}
-                    <TabsContent value="patients" className="mt-6 animate-in fade-in slide-in-from-bottom-2">
+                    < TabsContent value="patients" className="mt-6 animate-in fade-in slide-in-from-bottom-2" >
                         <div className="space-y-6">
                             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                                 <h1 className="text-2xl font-black italic text-slate-800">Votre Fichier Patient</h1>
@@ -455,10 +479,10 @@ const MedecinDashboard = () => {
                                 ))}
                             </div>
                         </div>
-                    </TabsContent>
+                    </TabsContent >
 
                     {/* ANALYTICS CONTENT */}
-                    <TabsContent value="analytics" className="mt-6 animate-in fade-in slide-in-from-bottom-2">
+                    < TabsContent value="analytics" className="mt-6 animate-in fade-in slide-in-from-bottom-2" >
                         <div className="space-y-8">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <Card className="border-none shadow-premium bg-gradient-to-br from-indigo-500 to-indigo-600 text-white rounded-3xl">
@@ -504,12 +528,12 @@ const MedecinDashboard = () => {
                                 </Card>
                             </div>
                         </div>
-                    </TabsContent>
-                </Tabs>
-            </main>
+                    </TabsContent >
+                </Tabs >
+            </main >
 
             {/* FICHE MALADE DIALOG */}
-            <Dialog open={isPatientDialogOpen} onOpenChange={setIsPatientDialogOpen}>
+            < Dialog open={isPatientDialogOpen} onOpenChange={setIsPatientDialogOpen} >
                 <DialogContent className="max-w-3xl overflow-hidden rounded-3xl p-0 border shadow-2xl bg-white animate-in zoom-in-95 duration-200">
                     {selectedPatient && (
                         <div className="flex flex-col h-[85vh]">
@@ -648,7 +672,7 @@ const MedecinDashboard = () => {
                         </div>
                     )}
                 </DialogContent>
-            </Dialog>
+            </Dialog >
 
             <Dialog open={!!viewingNote} onOpenChange={(open) => !open && setViewingNote(null)}>
                 <DialogContent className="max-w-sm w-[90vw] rounded-2xl p-6 shadow-2xl border-none">
@@ -674,7 +698,7 @@ const MedecinDashboard = () => {
             <footer className="p-4 border-t bg-muted/20 text-center">
                 <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-medium">&copy; PasseVite - Gestion Holistique des Soins</p>
             </footer>
-        </div>
+        </div >
     );
 };
 
