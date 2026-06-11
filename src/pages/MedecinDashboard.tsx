@@ -16,8 +16,9 @@ import {
     PieChart, DollarSign, Activity, FileDown, Edit3,
     X, Printer, ClipboardList, CheckCircle2, ChevronRight,
     LayoutDashboard, MapPin, Phone, ArrowUpRight, User, Trash2,
-    Calendar as CalIcon, MessageSquare, XCircle
+    Calendar as CalIcon, MessageSquare, XCircle, Pill
 } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { format, parseISO, startOfToday, endOfToday, startOfDay } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -25,6 +26,19 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
+
+const COMMON_MEDICATIONS: Record<string, any> = {
+    'Paracetamol 500mg': { dosage: '1 comprimé', duree: '3 jours', frequency_count: 3, timing: 'apres' },
+    'Paracetamol 1g': { dosage: '1 comprimé', duree: '3 jours', frequency_count: 3, timing: 'apres' },
+    'Amoxicilline 1g': { dosage: '1 comprimé', duree: '7 jours', frequency_count: 2, timing: 'apres' },
+    'Augmentin 1g': { dosage: '1 sachet/cp', duree: '7 jours', frequency_count: 2, timing: 'apres' },
+    'Spifen 400mg': { dosage: '1 comprimé', duree: '3 jours', frequency_count: 3, timing: 'apres' },
+    'Flagyl 500mg': { dosage: '1 comprimé', duree: '5 jours', frequency_count: 3, timing: 'apres' },
+    'Kétoprofène': { dosage: '1 comprimé', duree: '5 jours', frequency_count: 2, timing: 'apres' },
+    'Bain de bouche': { dosage: '1 mesure', duree: '10 jours', frequency_count: 3, timing: 'apres' },
+    'Doliprane 1g': { dosage: '1 comprimé', duree: '3 jours', frequency_count: 3, timing: 'apres' },
+    'Clamoxyl 1g': { dosage: '1 comprimé', duree: '7 jours', frequency_count: 2, timing: 'apres' }
+};
 
 const MedecinDashboard = () => {
     const navigate = useNavigate();
@@ -68,6 +82,30 @@ const MedecinDashboard = () => {
     const [isPatientDialogOpen, setIsPatientDialogOpen] = useState(false);
     const [viewingNote, setViewingNote] = useState<string | null>(null);
 
+    // ORDONNANCE MODAL STATE
+    const [showOrdonnanceModal, setShowOrdonnanceModal] = useState(false);
+    const [savingOrdonnance, setSavingOrdonnance] = useState(false);
+    const [dbMedications, setDbMedications] = useState<any[]>([]);
+    const [ordonnanceForm, setOrdonnanceForm] = useState({
+        patient_name: '',
+        age: '',
+        date: format(new Date(), 'yyyy-MM-dd'),
+        medications: [{ name: '', dosage: '', duree: '', frequency_count: 1, frequency_unit: 'comprimé(s)', timing: 'apres', instructions: '' }],
+        notes: ''
+    });
+
+    // NEW MEDICATION MODAL STATE
+    const [showNewMedModal, setShowNewMedModal] = useState(false);
+    const [creatingMed, setCreatingMed] = useState(false);
+    const [newMedForm, setNewMedForm] = useState({
+        name: '',
+        default_dosage: '',
+        default_duration: '',
+        default_frequency_count: 1,
+        default_frequency_unit: 'comprimé(s)',
+        default_timing: 'apres'
+    });
+
 
     // Fetch Patient History (Appointments & Ordonnances)
     const { data: patientHistory, isLoading: isLoadingHistory } = useQuery({
@@ -107,6 +145,12 @@ const MedecinDashboard = () => {
                 .order('completed_at', { ascending: false });
             if (clientData) setPatients(clientData);
 
+            const { data: medData } = await supabase
+                .from('medications')
+                .select('*')
+                .order('name');
+            if (medData) setDbMedications(medData);
+
         } catch (error) {
             console.error('Error fetching dashboard data:', error);
             toast.error('Erreur lors du chargement des données');
@@ -140,6 +184,194 @@ const MedecinDashboard = () => {
             supabase.removeChannel(channel);
         };
     }, [doctorInfo, fetchDashboardData]);
+
+    const handleCreateMedication = async () => {
+        if (!newMedForm.name) {
+            toast.error('Veuillez entrer le nom du médicament');
+            return;
+        }
+
+        setCreatingMed(true);
+        try {
+            // We only save the name because the current database schema only contains 'id' and 'name'
+            const { error } = await supabase.from('medications').insert([{
+                name: newMedForm.name
+            }]);
+            if (error) throw error;
+            toast.success('Médicament ajouté au catalogue');
+            setShowNewMedModal(false);
+            setNewMedForm({
+                name: '',
+                default_dosage: '',
+                default_duration: '',
+                default_frequency_count: 1,
+                default_frequency_unit: 'comprimé(s)',
+                default_timing: 'apres'
+            });
+            fetchDashboardData();
+        } catch (err: any) {
+            toast.error('Erreur: ' + err.message);
+            console.error('Database Error:', err);
+        } finally {
+            setCreatingMed(false);
+        }
+    };
+
+    const handleSaveOrdonnance = async () => {
+        if (!doctorInfo) return;
+        if (!ordonnanceForm.patient_name || ordonnanceForm.medications.some(m => !m.name)) {
+            toast.error('Veuillez remplir le nom du patient et au moins un médicament');
+            return;
+        }
+
+        setSavingOrdonnance(true);
+        try {
+            const { error } = await supabase.from('prescriptions').insert([{
+                doctor_id: doctorInfo.id,
+                patient_name: ordonnanceForm.patient_name,
+                prescription_date: ordonnanceForm.date,
+                medications: ordonnanceForm.medications as any,
+                notes: ordonnanceForm.notes,
+                age: ordonnanceForm.age ? parseInt(ordonnanceForm.age) : null
+            }]);
+
+            if (error) throw error;
+
+            toast.success('Ordonnance créée');
+            setShowOrdonnanceModal(false);
+            setOrdonnanceForm({
+                patient_name: '',
+                age: '',
+                date: format(new Date(), 'yyyy-MM-dd'),
+                medications: [{ name: '', dosage: '', duree: '', frequency_count: 1, frequency_unit: 'comprimé(s)', timing: 'apres', instructions: '' }],
+                notes: ''
+            });
+            fetchDashboardData();
+        } catch (err: any) {
+            toast.error('Erreur: ' + err.message);
+        } finally {
+            setSavingOrdonnance(false);
+        }
+    };
+
+    const handlePrintOrdonnance = (rx: any) => {
+        const printWindow = window.open('', '_blank');
+        if (!printWindow) return;
+
+        const medsHtml = rx.medications.map((m: any) => {
+            const timingMap: Record<string, string> = {
+                'avant': 'avant le repas',
+                'apres': 'après le repas',
+                'pendant': 'pendant le repas',
+                'soir': 'le soir',
+                'à jeun': 'à jeun'
+            };
+            const hTiming = timingMap[m.timing] || m.timing || '';
+
+            return `
+            <div style="margin-bottom: 5mm; font-family: 'Lato', sans-serif; break-inside: avoid;">
+                <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 1mm;">
+                    <span style="font-size: 13pt; font-weight: 700; color: #000; text-transform: uppercase;">
+                        ${m.name}${m.frequency_unit ? ` (${m.frequency_unit.replace('(s)', '')})` : ''}
+                    </span>
+                    <span style="font-size: 10pt; font-weight: 400; color: #2a8bbf;">Qsp: ${m.duree || m.duration || '--'}</span>
+                </div>
+                <div style="font-size: 12pt; color: #333; font-weight: 400; padding-left: 4mm; line-height: 1.4; font-style: italic;">
+                    ${m.dosage ? `${m.dosage} ` : ''}${m.frequency_count ? `${m.frequency_count} fois par jour ${hTiming}` : (m.instructions || '')}
+                </div>
+            </div>
+        `;
+        }).join('');
+
+        printWindow.document.write(`
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Ordonnance — ${rx.patient_name}</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400&family=Lato:wght@300;400;700&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: transparent; font-family: 'Lato', sans-serif; overflow: hidden; }
+  .page { width: 210mm; height: 297mm; background: #fff; padding: 10mm 15mm; display: flex; flex-direction: column; margin: 0 auto; position: relative; overflow: hidden; }
+  
+  /* WATERMARK */
+  .watermark { 
+    position: absolute; 
+    top: 50%; 
+    left: 50%; 
+    transform: translate(-50%, -50%) rotate(-15deg); 
+    opacity: 0.04; 
+    z-index: 0; 
+    width: 150mm; 
+    pointer-events: none;
+  }
+
+  .clinic-brand { text-align: center; font-family: 'Playfair Display', serif; font-size: 28pt; font-weight: 700; color: #3a9fd1; margin-bottom: 8mm; letter-spacing: 0.1em; text-transform: uppercase; z-index: 10; position: relative; }
+  .top-row { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 5mm; border-bottom: 1px solid #f0f7fb; padding-bottom: 3mm; z-index: 10; position: relative; }
+  .clinic-info { flex: 1; }
+  .clinic-name { font-size: 14pt; font-weight: 700; color: #2a8bbf; margin-bottom: 1mm; }
+  .doctor-title { font-size: 11pt; font-weight: 700; color: #2a8bbf; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 2mm; }
+  .clinic-address { font-size: 9pt; font-weight: 300; color: #5ab0d8; line-height: 1.4; }
+  .clinic-phone { font-size: 9pt; color: #2a8bbf; font-weight: 400; margin-top: 1mm; }
+  .patient-fields { display: flex; flex-direction: column; gap: 3mm; min-width: 70mm; }
+  .field-line { display: flex; align-items: baseline; gap: 6px; white-space: nowrap; }
+  .field-label { font-weight: 700; font-size: 11pt; color: #2a8bbf; }
+  .field-dots { flex: 1; min-width: 40mm; margin-bottom: 2px; padding-left: 3mm; font-size: 11pt; color: #333; font-weight: 400; }
+  .ordonnance-title { text-align: center; font-size: 16pt; font-weight: 700; color: #1a6fa0; letter-spacing: 0.2em; text-decoration: underline; text-underline-offset: 5px; margin: 8mm 0 10mm 0; z-index: 10; position: relative; }
+  .body-area { flex: 1; overflow: hidden; padding: 0 5mm; z-index: 10; position: relative; }
+  @media print { body { background: white; } .page { margin: 0; box-shadow: none; } @page { size: A4; margin: 0; } }
+</style>
+</head>
+<body>
+<div class="page">
+  <img src="/VitalWeb.png" class="watermark" alt="" />
+  <div class="clinic-brand">CLINIQUE PASSEVITE</div>
+  <div class="top-row">
+    <div class="clinic-info">
+      <div class="clinic-name">${doctorInfo?.name || 'Dr. Hakim'}</div>
+      <div class="doctor-title">Chirurgien Dentiste</div>
+      <div class="clinic-address">Cite 08mai 1945, bt17a<br>Bab Ezzouar<br>Alger</div>
+      <div class="clinic-phone">0554 02 97 32</div>
+    </div>
+    <div class="patient-fields">
+      <div class="field-line"><span class="field-label">Le :</span><span class="field-dots">${new Date(rx.prescription_date).toLocaleDateString('fr-FR')}</span></div>
+      <div class="field-line"><span class="field-label">Nom :</span><span class="field-dots">${rx.patient_name}</span></div>
+      <div class="field-line"><span class="field-label">Age :</span><span class="field-dots">${rx.age || '--'} ans</span></div>
+    </div>
+  </div>
+  <div class="ordonnance-title">ORDONNANCE</div>
+  <div class="body-area">${medsHtml}${rx.notes ? `<div style="margin-top: 8mm; font-size: 10pt; color: #666; font-style: italic;">Note : ${rx.notes}</div>` : ''}</div>
+</div>
+<script>window.onload = () => { window.print(); setTimeout(() => { window.close(); }, 500); };</script>
+</body>
+</html>
+        `);
+        printWindow.document.close();
+    };
+
+    const addMedicationToForm = () => {
+        setOrdonnanceForm({
+            ...ordonnanceForm,
+            medications: [...ordonnanceForm.medications, { name: '', dosage: '', duree: '', frequency_count: 1, frequency_unit: 'comprimé(s)', timing: 'apres', instructions: '' }]
+        });
+    };
+
+    const removeMedicationFromForm = (idx: number) => {
+        if (ordonnanceForm.medications.length <= 1) return;
+        const newMeds = [...ordonnanceForm.medications];
+        newMeds.splice(idx, 1);
+        setOrdonnanceForm({ ...ordonnanceForm, medications: newMeds });
+    };
+
+    const updateMedicationInForm = (idx: number, field: string, value: any) => {
+        setOrdonnanceForm(prev => ({
+            ...prev,
+            medications: prev.medications.map((m, i) =>
+                i === idx ? { ...m, [field]: value } : m
+            )
+        }));
+    };
 
     // Escape key to exit fullscreen calendar
     useEffect(() => {
@@ -175,17 +407,21 @@ const MedecinDashboard = () => {
     // ANALYTICS CALCULATIONS
     const [selectedRevenueDate, setSelectedRevenueDate] = useState(format(new Date(), 'yyyy-MM-dd'));
 
-    const selectedDayRevenue = useMemo(() => {
+    const filteredPaymentsByDate = useMemo(() => {
         const targetDate = new Date(selectedRevenueDate);
         targetDate.setHours(0, 0, 0, 0);
         const targetEnd = new Date(selectedRevenueDate);
         targetEnd.setHours(23, 59, 59, 999);
 
-        return patients.reduce((acc, p) => {
+        return patients.filter(p => {
             const pDate = new Date(p.completed_at);
-            return (pDate >= targetDate && pDate <= targetEnd) ? acc + (p.tranche_paid || 0) : acc;
-        }, 0);
+            return pDate >= targetDate && pDate <= targetEnd;
+        });
     }, [patients, selectedRevenueDate]);
+
+    const selectedDayRevenue = useMemo(() => {
+        return filteredPaymentsByDate.reduce((acc, p) => acc + (p.tranche_paid || 0), 0);
+    }, [filteredPaymentsByDate]);
 
     const monthlyData = useMemo(() => {
         const last6Months = Array.from({ length: 6 }).map((_, i) => {
@@ -252,7 +488,7 @@ const MedecinDashboard = () => {
                         <div className="flex flex-col gap-6">
                             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                                 <h1 className="text-2xl font-black italic text-slate-800">Gestion des Ordonnances</h1>
-                                <Button onClick={() => navigate('/ordonnance')} className="rounded-xl h-11 px-6 shadow-lg shadow-primary/20 bg-primary hover:bg-primary/90">
+                                <Button onClick={() => setShowOrdonnanceModal(true)} className="rounded-xl h-11 px-6 shadow-lg shadow-primary/20 bg-primary hover:bg-primary/90">
                                     <Plus className="h-4 w-4 mr-2" /> Nouvelle Ordonnance
                                 </Button>
                             </div>
@@ -299,8 +535,8 @@ const MedecinDashboard = () => {
                                                         </div>
                                                     </TableCell>
                                                     <TableCell className="text-right">
-                                                        <Button variant="ghost" size="sm" onClick={() => navigate('/ordonnance')} className="rounded-lg h-8 w-8 text-primary hover:bg-primary/5">
-                                                            <FileText className="h-4 w-4" />
+                                                        <Button variant="ghost" size="sm" onClick={() => handlePrintOrdonnance(rx)} className="rounded-lg h-8 w-8 text-primary hover:bg-primary/5">
+                                                            <Printer className="h-4 w-4" />
                                                         </Button>
                                                     </TableCell>
                                                 </TableRow>
@@ -510,20 +746,59 @@ const MedecinDashboard = () => {
                             </div>
 
                             <div className="grid grid-cols-1 gap-8">
-                                <Card className="border-none shadow-premium bg-white rounded-3xl">
-                                    <CardHeader>
-                                        <CardTitle className="text-lg font-black italic">Croissance du Revenu</CardTitle>
+                                <Card className="border-none shadow-premium bg-white rounded-3xl overflow-hidden">
+                                    <CardHeader className="p-6 border-b bg-muted/10">
+                                        <CardTitle className="text-lg font-black italic flex items-center gap-2">
+                                            <DollarSign className="h-5 w-5 text-primary" /> Détails des Paiements Récents
+                                        </CardTitle>
+                                        <CardDescription className="text-xs uppercase font-bold tracking-widest opacity-60">Dernières consultations terminées</CardDescription>
                                     </CardHeader>
-                                    <CardContent className="h-[300px]">
-                                        <ResponsiveContainer width="100%" height="100%">
-                                            <BarChart data={monthlyData}>
-                                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }} />
-                                                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }} />
-                                                <RechartsTooltip cursor={{ fill: '#f8fafc' }} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
-                                                <Bar dataKey="revenue" fill="hsl(var(--primary))" radius={[8, 8, 0, 0]} />
-                                            </BarChart>
-                                        </ResponsiveContainer>
+                                    <CardContent className="p-0">
+                                        <ScrollArea className="h-[450px]">
+                                            <Table>
+                                                <TableHeader className="bg-muted/30">
+                                                    <TableRow>
+                                                        <TableHead className="font-black text-[10px] uppercase tracking-wider text-center">Patient</TableHead>
+                                                        <TableHead className="font-black text-[10px] uppercase tracking-wider text-center">Date</TableHead>
+                                                        <TableHead className="font-black text-[10px] uppercase tracking-wider text-center">Traitement</TableHead>
+                                                        <TableHead className="font-black text-[10px] uppercase tracking-wider text-center">Total</TableHead>
+                                                        <TableHead className="font-black text-[10px] uppercase tracking-wider text-center">Payé</TableHead>
+                                                        <TableHead className="font-black text-[10px] uppercase tracking-wider text-center">Reste</TableHead>
+                                                    </TableRow>
+                                                </TableHeader>
+                                                <TableBody>
+                                                    {filteredPaymentsByDate.map((p, idx) => (
+                                                        <TableRow key={p.id || idx} className="hover:bg-slate-50 transition-colors">
+                                                            <TableCell className="text-center">
+                                                                <p className="font-black text-sm text-foreground uppercase tracking-tight">{p.client_name}</p>
+                                                            </TableCell>
+                                                            <TableCell className="text-center text-xs text-muted-foreground font-bold">
+                                                                {format(new Date(p.completed_at), 'dd/MM HH:mm')}
+                                                            </TableCell>
+                                                            <TableCell className="text-center text-xs font-bold text-primary italic">
+                                                                {p.treatment}
+                                                            </TableCell>
+                                                            <TableCell className="text-center font-bold text-slate-700">
+                                                                {p.total_amount?.toLocaleString()}
+                                                            </TableCell>
+                                                            <TableCell className="text-center font-black text-emerald-600 bg-emerald-50/50">
+                                                                {p.tranche_paid?.toLocaleString()}
+                                                            </TableCell>
+                                                            <TableCell className="text-center font-black text-rose-500">
+                                                                {(p.total_amount - (p.tranche_paid || 0)).toLocaleString()}
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    ))}
+                                                    {filteredPaymentsByDate.length === 0 && (
+                                                        <TableRow>
+                                                            <TableCell colSpan={6} className="text-center py-20 text-muted-foreground italic font-bold">
+                                                                Aucun paiement pour cette date
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    )}
+                                                </TableBody>
+                                            </Table>
+                                        </ScrollArea>
                                     </CardContent>
                                 </Card>
                             </div>
@@ -698,6 +973,205 @@ const MedecinDashboard = () => {
             <footer className="p-4 border-t bg-muted/20 text-center">
                 <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-medium">&copy; PasseVite - Gestion Holistique des Soins</p>
             </footer>
+
+            {/* CREATION ORDONNANCE MODAL */}
+            < Dialog open={showOrdonnanceModal} onOpenChange={setShowOrdonnanceModal} >
+                <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden rounded-[2.5rem] border-none shadow-2xl p-0 flex flex-col bg-white">
+                    <DialogHeader className="p-8 border-b bg-slate-50/50 flex-shrink-0">
+                        <DialogTitle className="text-2xl font-black italic text-primary flex items-center gap-3">
+                            <FileText className="h-8 w-8" /> Nouvelle Ordonnance
+                        </DialogTitle>
+                    </DialogHeader>
+
+                    <div className="flex-1 overflow-y-auto p-8 space-y-8">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <div className="space-y-2">
+                                <label className="text-[11px] font-black uppercase tracking-widest text-slate-400">Date de prescription</label>
+                                <Input type="date" value={ordonnanceForm.date} onChange={e => setOrdonnanceForm({ ...ordonnanceForm, date: e.target.value })} className="h-12 rounded-2xl border-slate-200 bg-slate-50 font-bold" />
+                            </div>
+                            <div className="md:col-span-1 space-y-2">
+                                <label className="text-[11px] font-black uppercase tracking-widest text-slate-400">Nom du patient *</label>
+                                <Input placeholder="Nom et Prénom" value={ordonnanceForm.patient_name} onChange={e => setOrdonnanceForm({ ...ordonnanceForm, patient_name: e.target.value })} className="h-12 rounded-2xl border-slate-200 font-bold" />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[11px] font-black uppercase tracking-widest text-slate-400">Âge</label>
+                                <Input type="number" placeholder="--" value={ordonnanceForm.age} onChange={e => setOrdonnanceForm({ ...ordonnanceForm, age: e.target.value })} className="h-12 rounded-2xl border-slate-200 font-bold" />
+                            </div>
+                        </div>
+
+                        <div className="space-y-4">
+                            <div className="flex justify-between items-center">
+                                <h3 className="text-xs font-black italic text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                    <Pill className="h-4 w-4" /> Médicaments Prescrits
+                                </h3>
+                                <Button variant="outline" size="sm" onClick={addMedicationToForm} className="rounded-xl text-[10px] font-black uppercase tracking-widest h-9 border-primary/20 text-primary hover:bg-primary/5">
+                                    <Plus className="h-4 w-4 mr-1.5" /> Ajouter un produit
+                                </Button>
+                            </div>
+
+                            <div className="space-y-4">
+                                {ordonnanceForm.medications.map((med, idx) => (
+                                    <div key={idx} className="p-6 bg-slate-50/50 rounded-[2rem] border border-slate-200/50 relative group">
+                                        {ordonnanceForm.medications.length > 1 && (
+                                            <Button variant="ghost" size="icon" onClick={() => removeMedicationFromForm(idx)} className="absolute -top-3 -right-3 h-8 w-8 rounded-full bg-white shadow-lg text-rose-500 hover:text-rose-600 hover:bg-rose-50 z-10 border border-slate-100">
+                                                <X className="h-4 w-4" />
+                                            </Button>
+                                        )}
+
+                                        <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                                            <div className="md:col-span-4 space-y-1.5">
+                                                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Nom</label>
+                                                <Select
+                                                    value={med.name}
+                                                    onValueChange={(val) => {
+                                                        if (val === 'ADD_NEW_MED') {
+                                                            setShowNewMedModal(true);
+                                                            return;
+                                                        }
+
+                                                        const common = COMMON_MEDICATIONS[val];
+                                                        const dbMed = dbMedications.find(x => x.name === val);
+
+                                                        const updatedMeds = ordonnanceForm.medications.map((m, i) => {
+                                                            if (i !== idx) return m;
+
+                                                            if (common) {
+                                                                return {
+                                                                    ...m,
+                                                                    name: val,
+                                                                    dosage: common.dosage,
+                                                                    duree: common.duree,
+                                                                    frequency_count: common.frequency_count,
+                                                                    timing: common.timing
+                                                                };
+                                                            } else if (dbMed) {
+                                                                return {
+                                                                    ...m,
+                                                                    name: dbMed.name,
+                                                                    dosage: dbMed.default_dosage || '',
+                                                                    duree: dbMed.default_duration || '',
+                                                                    frequency_count: dbMed.default_frequency_count || 1,
+                                                                    timing: dbMed.default_timing || 'apres'
+                                                                };
+                                                            }
+                                                            return { ...m, name: val };
+                                                        });
+
+                                                        setOrdonnanceForm(prev => ({ ...prev, medications: updatedMeds }));
+                                                    }}
+                                                >
+                                                    <SelectTrigger className="h-11 rounded-xl border-slate-200 bg-white font-bold"><SelectValue placeholder="Choisir..." /></SelectTrigger>
+                                                    <SelectContent className="max-h-64 rounded-2xl shadow-2xl border-none bg-white z-[60]">
+                                                        <ScrollArea className="h-64">
+                                                            <SelectItem value="ADD_NEW_MED" className="font-black text-primary border-b border-primary/10 py-3 bg-primary/5 hover:bg-primary/10 mb-1">
+                                                                <Plus className="h-4 w-4 mr-2 inline" /> Nouveau Médicament
+                                                            </SelectItem>
+                                                            {/* Combine Common & DB Meds, avoiding duplicates */}
+                                                            {Array.from(new Set([
+                                                                ...Object.keys(COMMON_MEDICATIONS),
+                                                                ...dbMedications.map(m => m.name)
+                                                            ])).sort().map(name => (
+                                                                <SelectItem key={name} value={name} className="font-bold py-2.5">
+                                                                    {name}
+                                                                </SelectItem>
+                                                            ))}
+                                                        </ScrollArea>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                            <div className="md:col-span-2 space-y-1.5">
+                                                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Dose</label>
+                                                <Input placeholder="1cp..." value={med.dosage} onChange={e => updateMedicationInForm(idx, 'dosage', e.target.value)} className="h-11 rounded-xl border-slate-200 bg-white font-bold" />
+                                            </div>
+                                            <div className="md:col-span-2 space-y-1.5">
+                                                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Durée</label>
+                                                <Input placeholder="7 jours" value={med.duree} onChange={e => updateMedicationInForm(idx, 'duree', e.target.value)} className="h-11 rounded-xl border-slate-200 bg-white font-bold" />
+                                            </div>
+                                            <div className="md:col-span-1 space-y-1.5">
+                                                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Fréq.</label>
+                                                <Input type="number" value={med.frequency_count} onChange={e => updateMedicationInForm(idx, 'frequency_count', parseInt(e.target.value))} className="h-11 rounded-xl border-slate-200 bg-white font-bold" />
+                                            </div>
+                                            <div className="md:col-span-3 space-y-1.5">
+                                                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Moment</label>
+                                                <Select value={med.timing} onValueChange={v => updateMedicationInForm(idx, 'timing', v)}>
+                                                    <SelectTrigger className="h-11 rounded-xl border-slate-200 bg-white font-bold"><SelectValue /></SelectTrigger>
+                                                    <SelectContent className="rounded-2xl shadow-xl bg-white z-[60]">
+                                                        <SelectItem value="avant">Avant repas</SelectItem>
+                                                        <SelectItem value="apres">Après repas</SelectItem>
+                                                        <SelectItem value="soir">Le soir</SelectItem>
+                                                        <SelectItem value="à jeun">À jeun</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+
+                    <DialogFooter className="p-8 border-t bg-slate-50/50 flex-shrink-0 gap-3">
+                        <Button variant="ghost" onClick={() => setShowOrdonnanceModal(false)} className="rounded-xl font-bold h-12 px-6">Annuler</Button>
+                        <Button variant="outline" onClick={() => handlePrintOrdonnance({ ...ordonnanceForm, prescription_date: ordonnanceForm.date })} className="rounded-xl font-bold h-12 px-6 border-slate-300 text-slate-600">
+                            <Printer className="h-5 w-5 mr-2" /> Imprimer
+                        </Button>
+                        <Button onClick={handleSaveOrdonnance} disabled={savingOrdonnance} className="rounded-xl font-black h-12 px-10 shadow-xl shadow-primary/20 bg-primary text-white hover:bg-primary/90">
+                            {savingOrdonnance ? 'Enregistrement...' : 'Enregistrer Ordonnance'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* ADD NEW MEDICATION MODAL */}
+            <Dialog open={showNewMedModal} onOpenChange={setShowNewMedModal}>
+                <DialogContent className="max-w-md rounded-[2.5rem] p-0 border-none shadow-2xl overflow-hidden bg-white z-[100]">
+                    <DialogHeader className="p-8 border-b bg-slate-50/50">
+                        <DialogTitle className="text-xl font-black italic text-primary flex items-center gap-2">
+                            <Pill className="h-6 w-6" /> Nouveau Médicament
+                        </DialogTitle>
+                    </DialogHeader>
+                    <div className="p-8 space-y-6">
+                        <div className="space-y-2">
+                            <label className="text-[11px] font-black uppercase tracking-widest text-slate-400">Nom du médicament*</label>
+                            <Input placeholder="Ex: Paraceamol 500mg" value={newMedForm.name} onChange={e => setNewMedForm({ ...newMedForm, name: e.target.value })} className="h-12 rounded-2xl border-slate-200 font-bold" />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <label className="text-[11px] font-black uppercase tracking-widest text-slate-400">Dosage Défaut</label>
+                                <Input placeholder="1 cp" value={newMedForm.default_dosage} onChange={e => setNewMedForm({ ...newMedForm, default_dosage: e.target.value })} className="h-12 rounded-2xl border-slate-200 font-bold" />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[11px] font-black uppercase tracking-widest text-slate-400">Durée Défaut</label>
+                                <Input placeholder="7 jours" value={newMedForm.default_duration} onChange={e => setNewMedForm({ ...newMedForm, default_duration: e.target.value })} className="h-12 rounded-2xl border-slate-200 font-bold" />
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <label className="text-[11px] font-black uppercase tracking-widest text-slate-400">Fréquence</label>
+                                <Input type="number" value={newMedForm.default_frequency_count} onChange={e => setNewMedForm({ ...newMedForm, default_frequency_count: parseInt(e.target.value) })} className="h-12 rounded-2xl border-slate-200 font-bold" />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[11px] font-black uppercase tracking-widest text-slate-400">Moment</label>
+                                <Select value={newMedForm.default_timing} onValueChange={v => setNewMedForm({ ...newMedForm, default_timing: v })}>
+                                    <SelectTrigger className="h-12 rounded-2xl border-slate-200 font-bold"><SelectValue /></SelectTrigger>
+                                    <SelectContent className="rounded-2xl z-[110] bg-white shadow-2xl">
+                                        <SelectItem value="avant">Avant repas</SelectItem>
+                                        <SelectItem value="apres">Après repas</SelectItem>
+                                        <SelectItem value="soir">Le soir</SelectItem>
+                                        <SelectItem value="à jeun">À jeun</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+                    </div>
+                    <DialogFooter className="p-8 border-t bg-slate-50/50 gap-3">
+                        <Button variant="ghost" onClick={() => setShowNewMedModal(false)} className="rounded-xl font-bold h-12">Annuler</Button>
+                        <Button onClick={handleCreateMedication} disabled={creatingMed} className="rounded-xl font-black h-12 px-8 bg-primary text-white shadow-xl shadow-primary/20">
+                            {creatingMed ? 'Création...' : 'Ajouter au catalogue'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div >
     );
 };

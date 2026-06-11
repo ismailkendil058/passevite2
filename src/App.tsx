@@ -30,6 +30,8 @@ const MedecinDashboard = lazy(() => import("./pages/MedecinDashboard"));
 const UserManager = lazy(() => import("./pages/UserManager"));
 const LaboPage = lazy(() => import("./pages/LaboPage"));
 const PatientCard = lazy(() => import("./pages/PatientCard"));
+const Ordonnance = lazy(() => import("./pages/Ordonnance"));
+window.scrollTo(0, 0);
 
 
 const LoadingScreen = () => (
