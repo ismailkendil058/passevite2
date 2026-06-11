@@ -274,7 +274,7 @@ export function useQueue() {
     if (!activeSession) return { error: new Error('Aucune séance active') };
 
     const doctor = doctors.find(d => d.id === doctorId);
-    if (!doctor) return { error: new Error('Equipe introuvable') };
+    if (!doctor) return { error: new Error('Docteur introuvable') };
 
     // Get next number for this state in current session by checking BOTH tables
     const [qRes, cRes] = await Promise.all([
@@ -342,8 +342,8 @@ export function useQueue() {
     }
 
     if (appointmentId) {
-      // Mark appointment as 'coming'
-      await supabase.from('appointments').update({ status: 'coming' }).eq('id', appointmentId);
+      // Mark appointment as 'attended' when patient is added to queue
+      await supabase.from('appointments').update({ status: 'attended' }).eq('id', appointmentId);
     }
 
     if (data && !error) {

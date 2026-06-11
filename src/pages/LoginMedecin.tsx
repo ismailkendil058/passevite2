@@ -71,7 +71,7 @@ const LoginMedecin = () => {
                     <div className="mx-auto block">
                         <img src="/VitalWeb.png" alt="Logo" className="h-10 w-auto brightness-0 opacity-80 mx-auto" />
                         <h1 className="text-3xl font-serif font-bold tracking-tight text-[#1F1F3D] mt-4 uppercase">PasseVite</h1>
-                        <p className="text-[10px] tracking-[0.4em] text-[#5C5CD6] mt-1 font-bold">PORTAIL EQUIPE</p>
+                        <p className="text-[10px] tracking-[0.4em] text-[#5C5CD6] mt-1 font-bold">PORTAIL DOCTEUR</p>
                     </div>
                     <div className="w-16 h-16 rounded-3xl bg-[#5C5CD6]/10 flex items-center justify-center mx-auto shadow-sm">
                         <Users className="h-8 w-8 text-[#5C5CD6]" />

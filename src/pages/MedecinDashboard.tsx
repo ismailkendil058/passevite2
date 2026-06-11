@@ -497,7 +497,7 @@ const MedecinDashboard = () => {
                         <Users className="h-5 w-5 text-primary" />
                     </div>
                     <div>
-                        <h1 className="text-xl font-bold text-foreground italic">PasseVite Equipe</h1>
+                        <h1 className="text-xl font-bold text-foreground italic">PasseVite Docteur</h1>
                         <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Tableau de bord de soins</p>
                     </div>
                 </div>
@@ -624,7 +624,7 @@ const MedecinDashboard = () => {
                                                         const minutes = date.getMinutes();
                                                         const offset = (hours - 7) * 120 + (minutes / 60) * 120 + 64;
                                                         const durMatch = appt.notes?.match(/\[DUR:(\d+)\]/);
-                                                        const duration = durMatch ? parseInt(durMatch[1]) : 30;
+                                                        const duration = durMatch ? parseInt(durMatch[1]) : 60;
                                                         const displayNotes = appt.notes?.replace(/\[DUR:\d+\]\s*/, '') || 'Sans note';
                                                         const cardHeight = (duration / 60) * 120 - 10;
                                                         return (

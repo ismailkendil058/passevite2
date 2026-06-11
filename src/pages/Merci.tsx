@@ -26,7 +26,7 @@ const Merci = () => {
               Merci pour votre retour
             </CardTitle>
             <CardDescription className="text-xl md:text-2xl text-muted-foreground max-w-lg mx-auto leading-relaxed">
-              Notre équipe examinera votre message afin d'améliorer votre expérience.
+              Notre docteur examinera votre message afin d'améliorer votre expérience.
             </CardDescription>
           </CardHeader>
 

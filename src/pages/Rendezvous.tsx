@@ -96,7 +96,7 @@ const Rendezvous = () => {
     const [newApptTime, setNewApptTime] = useState('09:00');
     const [newApptDoctor, setNewApptDoctor] = useState('');
     const [newApptNotes, setNewApptNotes] = useState('');
-    const [newApptDuration, setNewApptDuration] = useState(30);
+    const [newApptDuration, setNewApptDuration] = useState(60);
     const [editingApptId, setEditingApptId] = useState<string | null>(null);
     const [apptSearchQuery, setApptSearchQuery] = useState('');
     const [apptStatusFilter, setApptStatusFilter] = useState<'all' | 'pending' | 'accepted' | 'denied'>('all');
@@ -244,7 +244,7 @@ const Rendezvous = () => {
                     client_name: visit.client_name,
                     doctor_id: visit.apptDoctor,
                     appointment_at: appointmentAt.toISOString(),
-                    notes: visit.apptNotes || '',
+                    notes: `[DUR:60] ${visit.apptNotes || ''}`.trim(),
                     status: 'scheduled'
                 };
 
@@ -268,9 +268,14 @@ const Rendezvous = () => {
         }
     };
 
-    const handleQuickPayment = async (latestEntry: CompletedClient) => {
+    const handleQuickPayment = async (latestEntry: CompletedClient, reste: number) => {
         if (quickPaymentAmount <= 0) {
             toast.error('Le montant doit être supérieur à 0');
+            return;
+        }
+
+        if (quickPaymentAmount > reste) {
+            toast.error(`Le versement (${quickPaymentAmount.toLocaleString()} DZD) ne peut pas dépasser le reste à payer (${reste.toLocaleString()} DZD)`);
             return;
         }
 
@@ -560,11 +565,12 @@ const Rendezvous = () => {
 
             const matchesStatus =
                 apptStatusFilter === 'all' ||
-                (apptStatusFilter === 'accepted' && a.status === 'coming') ||
+                (apptStatusFilter === 'accepted' && a.status === 'coming') || // Usually 'coming' is for people in queue, but user wants to hide them
                 (apptStatusFilter === 'denied' && a.status === 'denied') ||
                 (apptStatusFilter === 'pending' && (a.status === 'scheduled' || a.status === 'confirmed'));
 
-            return isWithin24h && matchesStatus && (a.status === 'scheduled' || a.status === 'confirmed' || a.status === 'coming' || a.status === 'denied');
+            // Filter out 'attended' status completely from upcoming view
+            return isWithin24h && matchesStatus && a.status !== 'attended';
         });
     }, [parsedAppointments, apptStatusFilter]);
 
@@ -583,12 +589,12 @@ const Rendezvous = () => {
     };
 
     const handleSendSMS = (phone: string, name: string, time: string) => {
-        const message = `Clinique PasseVite : votre rendez-vous avec notre équipe est dans 24h. Merci de confirmer votre présence.`;
+        const message = `Clinique PasseVite : votre rendez-vous avec notre docteur est dans 24h. Merci de confirmer votre présence.`;
         window.open(`sms:${phone}?body=${encodeURIComponent(message)}`, '_blank');
     };
 
     const handleSendWhatsApp = (phone: string, name: string, time: string) => {
-        const message = `Clinique PasseVite : votre rendez-vous avec notre équipe est dans 24h. Merci de confirmer votre présence.`;
+        const message = `Clinique PasseVite : votre rendez-vous avec notre docteur est dans 24h. Merci de confirmer votre présence.`;
         const normalizePhoneForWhatsApp = (p: string) => {
             let digits = (p || '').replace(/\D/g, '');
             if (!digits) return '';
@@ -716,7 +722,7 @@ const Rendezvous = () => {
             setNewApptDuration(parseInt(durMatch[1]));
             setNewApptNotes(appt.notes.replace(/\[DUR:\d+\]\s*/, ''));
         } else {
-            setNewApptDuration(30);
+            setNewApptDuration(60);
             setNewApptNotes(appt.notes || '');
         }
 
@@ -1204,9 +1210,11 @@ const Rendezvous = () => {
                                                                 <p className="text-[10px] uppercase font-bold text-emerald-600">Montant total</p>
                                                                 <p className="text-lg font-bold text-emerald-800">{latestTotalForChosen.toLocaleString()} DZD</p>
                                                             </div>
-                                                            <Button variant="default" size="sm" className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-200 shrink-0" onClick={() => setIsPaymentOpen(true)}>
-                                                                <Plus className="h-4 w-4" /> Verser
-                                                            </Button>
+                                                            {totalPaidForChosen < latestTotalForChosen && (
+                                                                <Button variant="default" size="sm" className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-200 shrink-0" onClick={() => setIsPaymentOpen(true)}>
+                                                                    <Plus className="h-4 w-4" /> Verser
+                                                                </Button>
+                                                            )}
                                                         </div>
                                                     </div>
 
@@ -1237,7 +1245,7 @@ const Rendezvous = () => {
                                                                 </div>
                                                                 <Button
                                                                     className="w-full h-12 rounded-xl text-md font-bold bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-200"
-                                                                    onClick={() => entriesForChosen[0] && handleQuickPayment(entriesForChosen[0])}
+                                                                    onClick={() => entriesForChosen[0] && handleQuickPayment(entriesForChosen[0], latestTotalForChosen - totalPaidForChosen)}
                                                                 >
                                                                     Confirmer le Paiement
                                                                 </Button>
@@ -1435,13 +1443,13 @@ const Rendezvous = () => {
                                                     </div>
                                                 </div>
                                                 <div className="space-y-2">
-                                                    <label className="text-[10px] uppercase font-black text-muted-foreground">Equipe</label>
+                                                    <label className="text-[10px] uppercase font-black text-muted-foreground">Docteur</label>
                                                     <Select
                                                         value={newVisitData.apptDoctor}
                                                         onValueChange={val => setNewVisitData({ ...newVisitData, apptDoctor: val })}
                                                     >
                                                         <SelectTrigger className="rounded-xl h-11 px-3 text-xs">
-                                                            <SelectValue placeholder="Choisir l'équipe" />
+                                                            <SelectValue placeholder="Choisir le docteur" />
                                                         </SelectTrigger>
                                                         <SelectContent>
                                                             {doctors.map(d => (
@@ -1532,7 +1540,7 @@ const Rendezvous = () => {
                                                 <Users className="h-5 w-5 text-primary" />
                                             </div>
                                             <div>
-                                                <h3 className="font-black italic text-base sm:text-xl text-primary leading-tight">Vue Equipe</h3>
+                                                <h3 className="font-black italic text-base sm:text-xl text-primary leading-tight">Vue Docteur</h3>
                                                 <p className="text-[10px] sm:text-xs text-muted-foreground uppercase font-bold tracking-widest opacity-60">Agenda Global</p>
                                             </div>
                                         </div>
@@ -1616,6 +1624,7 @@ const Rendezvous = () => {
                                                                     const dayStart = startOfDay(newApptDate || new Date()).getTime();
                                                                     const filteredAppts = parsedAppointments.filter(a =>
                                                                         a.status !== 'denied' &&
+                                                                        a.status !== 'attended' &&
                                                                         a.doctor_id === doctor.id &&
                                                                         a.startOfDayTime === dayStart
                                                                     );
@@ -1641,7 +1650,7 @@ const Rendezvous = () => {
 
                                                                         // Extract duration from notes
                                                                         const durMatch = appt.notes?.match(/\[DUR:(\d+)\]/);
-                                                                        const duration = durMatch ? parseInt(durMatch[1]) : 30;
+                                                                        const duration = durMatch ? parseInt(durMatch[1]) : 60;
                                                                         const displayNotes = appt.notes?.replace(/\[DUR:\d+\]\s*/, '') || 'Sans note';
                                                                         const cardHeight = (duration / 60) * 120 - 10;
 
@@ -1831,9 +1840,9 @@ const Rendezvous = () => {
 
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
-                                <label className="text-xs font-black uppercase text-muted-foreground">Equipe</label>
+                                <label className="text-xs font-black uppercase text-muted-foreground">Docteur</label>
                                 <Select value={newApptDoctor} onValueChange={setNewApptDoctor}>
-                                    <SelectTrigger className="h-11 rounded-xl"><SelectValue placeholder="Equipe" /></SelectTrigger>
+                                    <SelectTrigger className="h-11 rounded-xl"><SelectValue placeholder="Docteur" /></SelectTrigger>
                                     <SelectContent>
                                         {doctors.map(d => (
                                             <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>

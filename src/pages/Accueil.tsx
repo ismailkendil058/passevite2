@@ -63,7 +63,7 @@ const QueueItem = React.memo(({ entry, index, onEdit, onDelete, onNext }: { entr
               </Badge>
             </div>
             <p className="text-xs text-muted-foreground truncate">
-              equipe {entry.doctor?.name || '—'}
+              docteur {entry.doctor?.name || '—'}
             </p>
           </div>
         </div>
@@ -302,6 +302,11 @@ const Accueil = () => {
       toast.error('Veuillez remplir tous les champs');
       return;
     }
+
+    if (newState === 'R' && !linkedAppointmentId) {
+      toast.error('Sélectionnez un rendez-vous');
+      return;
+    }
     const { error } = await addClient(newPhone, newState, newDoctorId, newPatientName, linkedAppointmentId || undefined);
     if (error) {
       if ((error as any).code === '23505') {
@@ -467,6 +472,16 @@ const Accueil = () => {
       return;
     }
     if (isCompletingClient) return;
+
+    // Validation: Payment cannot exceed remaining balance
+    const currentTotal = parseFloat(totalAmount) || 0;
+    const currentTranche = parseFloat(tranchePaid) || 0;
+    const reste = currentTotal - totalPaidPreviously;
+
+    if (currentTranche > reste) {
+      toast.error(`Le versement (${currentTranche.toLocaleString()} DZD) ne peut pas dépasser le reste à payer (${reste.toLocaleString()} DZD)`);
+      return;
+    }
 
     setIsCompletingClient(true);
 
@@ -1011,6 +1026,12 @@ const Accueil = () => {
               className="h-11 sm:h-12"
             />
 
+            {newState === 'R' && !linkedAppointmentId && (
+              <p className="text-[11px] font-medium text-blue-600 bg-blue-50 p-2 rounded-lg border border-blue-100">
+                ⚠️ Sélectionnez un rendez-vous ci-dessous.
+              </p>
+            )}
+
             {foundAppointments.length > 0 && !linkedAppointmentId && (
               <div className="space-y-2 p-3 bg-blue-50/50 border border-blue-100 rounded-xl animate-in fade-in slide-in-from-top-2">
                 <p className="text-[10px] font-black uppercase text-blue-600 tracking-widest flex items-center gap-1.5 px-1">
@@ -1062,7 +1083,7 @@ const Accueil = () => {
               </div>
             )}
             <Select value={newDoctorId} onValueChange={setNewDoctorId}>
-              <SelectTrigger className="h-11 sm:h-12"><SelectValue placeholder="Equipe" /></SelectTrigger>
+              <SelectTrigger className="h-11 sm:h-12"><SelectValue placeholder="Docteur" /></SelectTrigger>
               <SelectContent>
                 {doctors.map(d => (
                   <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
@@ -1071,7 +1092,13 @@ const Accueil = () => {
             </Select>
           </div>
           <DialogFooter>
-            <Button onClick={handleAddClient} className="w-full h-11 sm:h-12">Ajouter</Button>
+            <Button
+              onClick={handleAddClient}
+              className="w-full h-11 sm:h-12"
+              disabled={newState === 'R' && !linkedAppointmentId}
+            >
+              Ajouter
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1090,6 +1117,44 @@ const Accueil = () => {
                 onChange={(e) => setClientName(e.target.value)}
                 className="h-11 sm:h-12"
               />
+              {historyTreatments.length > 0 ? (
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground">Historique des traitements :</p>
+                  <div className="flex flex-col gap-2">
+                    {historyTreatments.map(ht => (
+                      <Button
+                        key={ht.treatment}
+                        variant={selectedHistoryTreatment === ht.treatment ? 'secondary' : 'outline'}
+                        size="sm"
+                        className="justify-between"
+                        onClick={() => {
+                          if (selectedHistoryTreatment === ht.treatment) {
+                            setSelectedHistoryTreatment(null);
+                            setTreatment('');
+                            setTotalAmount('');
+                            setTotalPaidPreviously(0);
+                          } else {
+                            setSelectedHistoryTreatment(ht.treatment);
+                            setTreatment(ht.treatment);
+                            setTotalAmount(ht.totalAmount?.toString() || '');
+                            setTotalPaidPreviously(ht.totalPaid || 0);
+                          }
+                        }}
+                      >
+                        <span className="truncate">{ht.treatment}</span>
+                        <span className="text-xs">{(ht.totalPaid || 0).toLocaleString()} / {(ht.totalAmount || 0).toLocaleString()} DZD</span>
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                totalPaidPreviously > 0 && (
+                  <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-100 flex justify-between items-center">
+                    <span className="text-xs font-medium text-emerald-800">Déjà payé (total history):</span>
+                    <span className="text-sm font-bold text-emerald-700">{totalPaidPreviously.toLocaleString()} DZD</span>
+                  </div>
+                )
+              )}
               <div className="relative">
                 <Input
                   placeholder="Traitement"
@@ -1100,6 +1165,7 @@ const Accueil = () => {
                   }}
                   onFocus={() => setShowTreatmentSuggestions(true)}
                   onBlur={() => setTimeout(() => setShowTreatmentSuggestions(false), 150)}
+                  disabled={!!selectedHistoryTreatment}
                   className="h-11 sm:h-12"
                 />
                 {showTreatmentSuggestions && (
@@ -1129,38 +1195,16 @@ const Accueil = () => {
                 value={totalAmount}
                 onChange={(e) => setTotalAmount(e.target.value)}
                 type="number"
+                disabled={!!selectedHistoryTreatment}
                 className="h-11 sm:h-12"
               />
-              {historyTreatments.length > 0 ? (
-                <div className="space-y-2">
-                  <p className="text-xs font-medium text-muted-foreground">Historique des traitements :</p>
-                  <div className="flex flex-col gap-2">
-                    {historyTreatments.map(ht => (
-                      <Button
-                        key={ht.treatment}
-                        variant={selectedHistoryTreatment === ht.treatment ? 'secondary' : 'outline'}
-                        size="sm"
-                        className="justify-between"
-                        onClick={() => {
-                          setSelectedHistoryTreatment(ht.treatment);
-                          setTreatment(ht.treatment);
-                          setTotalAmount(ht.totalAmount?.toString() || '');
-                          setTotalPaidPreviously(ht.totalPaid || 0);
-                        }}
-                      >
-                        <span className="truncate">{ht.treatment}</span>
-                        <span className="text-xs">{(ht.totalPaid || 0).toLocaleString()} / {(ht.totalAmount || 0).toLocaleString()} DZD</span>
-                      </Button>
-                    ))}
-                  </div>
+              {totalAmount && (
+                <div className="flex justify-between items-center px-2 py-1.5 bg-rose-50/30 rounded-lg border border-rose-100/50 -mb-1 animate-in fade-in slide-in-from-top-1">
+                  <span className="text-[10px] font-bold uppercase text-rose-600 tracking-wider">Reste à payer</span>
+                  <span className="text-sm font-black text-rose-700">
+                    {(parseFloat(totalAmount) - totalPaidPreviously).toLocaleString()} DZD
+                  </span>
                 </div>
-              ) : (
-                totalPaidPreviously > 0 && (
-                  <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-100 flex justify-between items-center">
-                    <span className="text-xs font-medium text-emerald-800">Déjà payé (total history):</span>
-                    <span className="text-sm font-bold text-emerald-700">{totalPaidPreviously.toLocaleString()} DZD</span>
-                  </div>
-                )
               )}
               <Input
                 placeholder="Tranche payée aujourd'hui (DZD)"
@@ -1215,9 +1259,9 @@ const Accueil = () => {
                     </div>
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold uppercase text-muted-foreground">Equipe</label>
+                    <label className="text-[10px] font-bold uppercase text-muted-foreground">Docteur</label>
                     <Select value={nextApptDoctorId} onValueChange={setNextApptDoctorId}>
-                      <SelectTrigger className="h-10"><SelectValue placeholder="Equipe" /></SelectTrigger>
+                      <SelectTrigger className="h-10"><SelectValue placeholder="Docteur" /></SelectTrigger>
                       <SelectContent>
                         {doctors.map(d => (
                           <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
@@ -1293,7 +1337,7 @@ const Accueil = () => {
               </SelectContent>
             </Select>
             <Select value={editDoctorId} onValueChange={setEditDoctorId}>
-              <SelectTrigger className="h-11 sm:h-12"><SelectValue placeholder="Equipe" /></SelectTrigger>
+              <SelectTrigger className="h-11 sm:h-12"><SelectValue placeholder="Docteur" /></SelectTrigger>
               <SelectContent>
                 {doctors.map(d => (
                   <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>

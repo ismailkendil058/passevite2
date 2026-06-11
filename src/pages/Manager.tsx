@@ -145,7 +145,7 @@ const Manager = () => {
   }, [filtered]);
 
   const exportExcel = () => {
-    const headers = ['Nom', 'Téléphone', 'ID', 'Equipe', 'Traitement', 'Montant Total', 'Tranche Payée', 'Réceptionniste', 'Date'];
+    const headers = ['Nom', 'Téléphone', 'ID', 'Docteur', 'Traitement', 'Montant Total', 'Tranche Payée', 'Réceptionniste', 'Date'];
     const rows = filtered.map(c => [
       c.client_name,
       c.phone,
@@ -228,9 +228,9 @@ const Manager = () => {
           </div>
           <div className="flex gap-2">
             <Select value={doctorFilter} onValueChange={setDoctorFilter}>
-              <SelectTrigger className="flex-1 sm:w-[150px] h-9 sm:h-10 text-sm"><SelectValue placeholder="Equipe" /></SelectTrigger>
+              <SelectTrigger className="flex-1 sm:w-[150px] h-9 sm:h-10 text-sm"><SelectValue placeholder="Docteur" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Toute l'équipe</SelectItem>
+                <SelectItem value="all">Tous les docteurs</SelectItem>
                 {doctors.map(d => (
                   <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>
                 ))}
@@ -283,7 +283,7 @@ const Manager = () => {
             <CardContent className="p-3 sm:p-4">
               <div className="flex items-center gap-1.5 sm:gap-2 mb-1 sm:mb-2">
                 <Stethoscope className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary" />
-                <span className="text-xs text-muted-foreground">Equipe</span>
+                <span className="text-xs text-muted-foreground">Docteur</span>
               </div>
               <p className="text-xl sm:text-2xl font-bold text-foreground">{analytics.byDoctor.size}</p>
             </CardContent>
@@ -373,7 +373,7 @@ const Manager = () => {
                 <TableRow>
                   <TableHead>Nom</TableHead>
                   <TableHead>Tél.</TableHead>
-                  <TableHead>Equipe</TableHead>
+                  <TableHead>Docteur</TableHead>
                   <TableHead>Traitement</TableHead>
                   <TableHead className="text-right">Montant</TableHead>
                   <TableHead className="text-right">Payé</TableHead>
