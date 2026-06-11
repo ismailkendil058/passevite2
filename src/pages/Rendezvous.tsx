@@ -16,7 +16,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
     LogOut, Search, MessageSquare, Calendar as CalendarIcon,
-    Users, CheckCircle2, XCircle, Clock, History, Plus, Phone, Trash2, Pencil, QrCode
+    Users, CheckCircle2, XCircle, Clock, History, Plus, Phone, Trash2, Pencil, QrCode, Maximize2, Minimize2
 } from 'lucide-react';
 import QrStickerModal from '@/components/QrStickerModal';
 import QrScannerModal from '@/components/QrScannerModal';
@@ -153,9 +153,6 @@ const Rendezvous = () => {
             if (docsData) {
                 setDoctors(docsData as any);
                 if (docsData.length > 0) {
-                    if (window.innerWidth < 640) {
-                        setSelectedDoctorMobile(docsData[0].id);
-                    }
                     // Pre-select first doctor for new visits to avoid null doctor_id
                     setNewVisitData(prev => ({ ...prev, doctor_id: docsData[0].id, apptDoctor: docsData[0].id }));
                 }
@@ -1529,43 +1526,40 @@ const Rendezvous = () => {
                                 onDoubleClick={() => setIsCalendarFullscreen(prev => !prev)}
                             >
                                 <CardContent className="p-0 h-full flex flex-col">
-                                    <div className="p-6 border-b bg-muted/20 flex flex-col sm:flex-row items-center justify-between gap-4">
-                                        <div>
-                                            <h3 className="font-black italic text-xl text-primary">Vue Equipe</h3>
-                                            <p className="text-xs text-muted-foreground">Gestion d'agenda globale</p>
+                                    <div className="p-4 border-b bg-muted/10 flex items-center justify-between gap-4">
+                                        <div className="flex items-center gap-3">
+                                            <div className="p-2 bg-primary/5 rounded-xl">
+                                                <Users className="h-5 w-5 text-primary" />
+                                            </div>
+                                            <div>
+                                                <h3 className="font-black italic text-base sm:text-xl text-primary leading-tight">Vue Equipe</h3>
+                                                <p className="text-[10px] sm:text-xs text-muted-foreground uppercase font-bold tracking-widest opacity-60">Agenda Global</p>
+                                            </div>
                                         </div>
-                                        <div className="flex gap-2">
-                                            <Button variant="outline" className="h-9 px-3 text-xs" onClick={() => setNewApptDate(new Date())}>Aujourd'hui</Button>
-                                            <Button className="h-9 px-3 text-xs gap-2" onClick={() => {
+                                        <div className="flex items-center gap-2">
+                                            <Button
+                                                variant="outline"
+                                                size="icon"
+                                                className="h-9 w-9 rounded-xl sm:hidden flex"
+                                                onClick={() => setIsCalendarFullscreen(!isCalendarFullscreen)}
+                                            >
+                                                {isCalendarFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+                                            </Button>
+                                            <Button variant="outline" className="h-9 px-3 text-xs rounded-xl hidden sm:flex" onClick={() => setNewApptDate(new Date())}>Aujourd'hui</Button>
+                                            <Button className="h-9 px-3 sm:px-4 text-[10px] sm:text-xs gap-2 rounded-xl" onClick={() => {
                                                 setSelectedClient(null);
                                                 setIsScheduleOpen(true);
                                             }}>
-                                                <Plus className="h-4 w-4" /> Nouveau RDV
+                                                <Plus className="h-4 w-4" /> <span className="hidden xs:inline">Nouveau RDV</span>
                                             </Button>
                                         </div>
                                     </div>
 
-                                    {/* Mobile Doctor Switcher (Pills) */}
-                                    <div className="px-6 pb-4 sm:hidden flex overflow-scroll no-scrollbar gap-2">
-                                        {doctors.map(d => (
-                                            <button
-                                                key={d.id}
-                                                onClick={() => setSelectedDoctorMobile(d.id)}
-                                                className={`
-                                                    px-4 py-1.5 rounded-full text-xs font-black transition-all whitespace-nowrap
-                                                    ${selectedDoctorMobile === d.id
-                                                        ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20 scale-105'
-                                                        : 'bg-muted text-muted-foreground hover:bg-muted/80'}
-                                                `}
-                                            >
-                                                {d.name}
-                                            </button>
-                                        ))}
-                                    </div>
 
-                                    <div className="p-0 sm:p-2 flex-1">
-                                        <ScrollArea className={`${isCalendarFullscreen ? 'h-[calc(100vh-160px)]' : 'h-[650px] sm:h-[600px]'} px-2 sm:px-4`}>
-                                            <div className="relative min-h-[1050px] min-w-0">
+
+                                    <div className="p-0 sm:p-2 flex-1 overflow-hidden relative">
+                                        <div className={`overflow-auto scrollbar-thin scrollbar-thumb-primary/10 ${isCalendarFullscreen ? 'h-[calc(100vh-100px)] sm:h-[calc(100vh-140px)]' : 'h-[650px] sm:h-[600px]'} px-2 sm:px-4 custom-scrollbar`}>
+                                            <div className="relative min-h-[1050px] w-fit min-w-full">
 
                                                 {/* Time Background Grid Lines */}
                                                 <div className="absolute inset-0 pt-10 pointer-events-none">
@@ -1601,98 +1595,96 @@ const Rendezvous = () => {
                                                 )}
 
                                                 {/* Doctor Columns */}
-                                                <div className={`ml-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 min-h-full ${selectedDoctorMobile === 'all' ? 'min-w-[700px] sm:min-w-0' : ''}`}>
-                                                    {doctors
-                                                        .filter(d => selectedDoctorMobile === 'all' || d.id === selectedDoctorMobile)
-                                                        .map(doctor => (
-                                                            <div key={doctor.id} className="relative min-h-[2000px] rounded-2xl bg-muted/5 border border-primary/5 overflow-hidden group/col">
-                                                                {/* Column Sticky Header */}
-                                                                <div className="sticky top-0 z-10 bg-white/80 dark:bg-black/40 backdrop-blur-md p-3 border-b border-primary/5 text-center group-hover/col:bg-primary/5 transition-colors">
-                                                                    <p className="text-[10px] text-primary font-black uppercase tracking-[0.2em] mb-0.5 opacity-60">Cabinet</p>
-                                                                    <p className="font-black text-sm text-foreground italic flex items-center justify-center gap-2">
-                                                                        <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-                                                                        {doctor.name}
-                                                                    </p>
-                                                                </div>
+                                                <div className="ml-8 flex sm:grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 min-h-full pb-10">
+                                                    {doctors.map(doctor => (
+                                                        <div key={doctor.id} className="relative min-h-[2000px] w-[280px] shrink-0 sm:shrink sm:w-auto rounded-2xl bg-muted/5 border border-primary/5 overflow-hidden group/col">
+                                                            {/* Column Sticky Header */}
+                                                            <div className="sticky top-0 z-10 bg-white/80 dark:bg-black/40 backdrop-blur-md p-3 border-b border-primary/5 text-center group-hover/col:bg-primary/5 transition-colors">
+                                                                <p className="text-[10px] text-primary font-black uppercase tracking-[0.2em] mb-0.5 opacity-60">Cabinet</p>
+                                                                <p className="font-black text-sm text-foreground italic flex items-center justify-center gap-2">
+                                                                    <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                                                                    {doctor.name}
+                                                                </p>
+                                                            </div>
 
-                                                                {/* Appointments for this doctor */}
-                                                                <div
-                                                                    className="relative h-full pt-10 cursor-crosshair"
-                                                                    onClick={(e) => handleEmptySlotClick(e, doctor.id)}
-                                                                >
-                                                                    {(() => {
-                                                                        const dayStart = startOfDay(newApptDate || new Date()).getTime();
-                                                                        const filteredAppts = parsedAppointments.filter(a =>
-                                                                            a.status !== 'denied' &&
-                                                                            a.doctor_id === doctor.id &&
-                                                                            a.startOfDayTime === dayStart
-                                                                        );
+                                                            {/* Appointments for this doctor */}
+                                                            <div
+                                                                className="relative h-full pt-10 cursor-crosshair"
+                                                                onClick={(e) => handleEmptySlotClick(e, doctor.id)}
+                                                            >
+                                                                {(() => {
+                                                                    const dayStart = startOfDay(newApptDate || new Date()).getTime();
+                                                                    const filteredAppts = parsedAppointments.filter(a =>
+                                                                        a.status !== 'denied' &&
+                                                                        a.doctor_id === doctor.id &&
+                                                                        a.startOfDayTime === dayStart
+                                                                    );
 
-                                                                        // Group by hour
-                                                                        const hourGroups: Record<number, any[]> = {};
-                                                                        filteredAppts.forEach(a => {
-                                                                            const h = parseISO(a.appointment_at).getHours();
-                                                                            if (!hourGroups[h]) hourGroups[h] = [];
-                                                                            hourGroups[h].push(a);
-                                                                        });
+                                                                    // Group by hour
+                                                                    const hourGroups: Record<number, any[]> = {};
+                                                                    filteredAppts.forEach(a => {
+                                                                        const h = parseISO(a.appointment_at).getHours();
+                                                                        if (!hourGroups[h]) hourGroups[h] = [];
+                                                                        hourGroups[h].push(a);
+                                                                    });
 
-                                                                        return filteredAppts.map(appt => {
-                                                                            const date = parseISO(appt.appointment_at);
-                                                                            const h = date.getHours();
-                                                                            const m = date.getMinutes();
-                                                                            const offset = (h - 7) * 120 + (m / 60) * 120;
+                                                                    return filteredAppts.map(appt => {
+                                                                        const date = parseISO(appt.appointment_at);
+                                                                        const h = date.getHours();
+                                                                        const m = date.getMinutes();
+                                                                        const offset = (h - 7) * 120 + (m / 60) * 120;
 
-                                                                            const group = hourGroups[h] || [];
-                                                                            const index = group.findIndex(a => a.id === appt.id);
-                                                                            const total = group.length;
-                                                                            const isOverlapping = total > 1;
+                                                                        const group = hourGroups[h] || [];
+                                                                        const index = group.findIndex(a => a.id === appt.id);
+                                                                        const total = group.length;
+                                                                        const isOverlapping = total > 1;
 
-                                                                            // Extract duration from notes
-                                                                            const durMatch = appt.notes?.match(/\[DUR:(\d+)\]/);
-                                                                            const duration = durMatch ? parseInt(durMatch[1]) : 30;
-                                                                            const displayNotes = appt.notes?.replace(/\[DUR:\d+\]\s*/, '') || 'Sans note';
-                                                                            const cardHeight = (duration / 60) * 120 - 10;
+                                                                        // Extract duration from notes
+                                                                        const durMatch = appt.notes?.match(/\[DUR:(\d+)\]/);
+                                                                        const duration = durMatch ? parseInt(durMatch[1]) : 30;
+                                                                        const displayNotes = appt.notes?.replace(/\[DUR:\d+\]\s*/, '') || 'Sans note';
+                                                                        const cardHeight = (duration / 60) * 120 - 10;
 
-                                                                            return (
-                                                                                <div
-                                                                                    key={appt.id}
-                                                                                    className={`
+                                                                        return (
+                                                                            <div
+                                                                                key={appt.id}
+                                                                                className={`
                                                                                         absolute p-3 rounded-2xl border-l-[6px] 
                                                                                         shadow-xl shadow-primary/5 transition-all duration-300 
                                                                                         hover:scale-[1.02] active:scale-95 z-20 cursor-pointer group
                                                                                         bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm border border-primary/5
                                                                                         ${isOverlapping ? (index === 0 ? 'left-2 w-[calc(50%-12px)]' : 'right-2 w-[calc(50%-12px)]') : 'left-2 right-2'}
                                                                                         ${appt.status === 'coming' ? 'border-l-emerald-500 shadow-emerald-500/10' :
-                                                                                            appt.status === 'denied' ? 'border-l-rose-500 shadow-rose-500/10' :
-                                                                                                appt.status === 'attended' ? 'border-l-blue-500 shadow-blue-500/10 opacity-75' :
-                                                                                                    'border-l-primary shadow-primary/10'}
+                                                                                        appt.status === 'denied' ? 'border-l-rose-500 shadow-rose-500/10' :
+                                                                                            appt.status === 'attended' ? 'border-l-blue-500 shadow-blue-500/10 opacity-75' :
+                                                                                                'border-l-primary shadow-primary/10'}
                                                                                     `}
-                                                                                    style={{ top: `${offset}px`, height: `${cardHeight}px` }}
-                                                                                    onClick={() => openEditModal(appt)}
-                                                                                >
-                                                                                    <div className="flex justify-between items-start mb-1">
-                                                                                        <span className={`text-[11px] font-black tracking-tighter italic ${appt.status === 'coming' ? 'text-emerald-600' : appt.status === 'denied' ? 'text-rose-600' : 'text-primary'}`}>
-                                                                                            {format(date, 'HH:mm')}
-                                                                                        </span>
-                                                                                        <div className={`w-1.5 h-1.5 rounded-full ${appt.status === 'coming' ? 'bg-emerald-500 animate-pulse' : 'bg-primary/20'}`} />
-                                                                                    </div>
-                                                                                    <p className="text-xs font-black text-foreground truncate uppercase tracking-tight">
-                                                                                        {appt.client_name}
-                                                                                    </p>
-                                                                                    <p className="text-[9px] text-muted-foreground font-bold mt-0.5 truncate flex items-center gap-1">
-                                                                                        <span className="w-1 h-1 rounded-full bg-muted-foreground/30" />
-                                                                                        {displayNotes}
-                                                                                    </p>
+                                                                                style={{ top: `${offset}px`, height: `${cardHeight}px` }}
+                                                                                onClick={() => openEditModal(appt)}
+                                                                            >
+                                                                                <div className="flex justify-between items-start mb-1">
+                                                                                    <span className={`text-[11px] font-black tracking-tighter italic ${appt.status === 'coming' ? 'text-emerald-600' : appt.status === 'denied' ? 'text-rose-600' : 'text-primary'}`}>
+                                                                                        {format(date, 'HH:mm')}
+                                                                                    </span>
+                                                                                    <div className={`w-1.5 h-1.5 rounded-full ${appt.status === 'coming' ? 'bg-emerald-500 animate-pulse' : 'bg-primary/20'}`} />
                                                                                 </div>
-                                                                            );
-                                                                        });
-                                                                    })()}
-                                                                </div>
+                                                                                <p className="text-xs font-black text-foreground truncate uppercase tracking-tight">
+                                                                                    {appt.client_name}
+                                                                                </p>
+                                                                                <p className="text-[9px] text-muted-foreground font-bold mt-0.5 truncate flex items-center gap-1">
+                                                                                    <span className="w-1 h-1 rounded-full bg-muted-foreground/30" />
+                                                                                    {displayNotes}
+                                                                                </p>
+                                                                            </div>
+                                                                        );
+                                                                    });
+                                                                })()}
                                                             </div>
-                                                        ))}
+                                                        </div>
+                                                    ))}
                                                 </div>
                                             </div>
-                                        </ScrollArea>
+                                        </div>
                                     </div>
                                 </CardContent>
                             </Card>
