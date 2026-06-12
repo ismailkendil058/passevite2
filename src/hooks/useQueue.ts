@@ -16,6 +16,9 @@ export interface QueueEntry {
   appointment_id?: string;
   created_at: string;
   doctor?: { name: string; initial: string };
+  treatment?: string;
+  total_amount?: number;
+  handoff_notes?: string;
 }
 
 export interface Doctor {
@@ -92,6 +95,30 @@ export function useQueue() {
       setInCabinetEntries(data as QueueEntry[]);
     }
   }, []);
+
+  const handoffConsultation = async (
+    entryId: string,
+    data: { treatment: string; total_amount: number; handoff_notes: string }
+  ) => {
+    console.log('Handoff triggered for:', entryId, data);
+    const { error } = await supabase
+      .from('queue_entries')
+      .update({
+        treatment: data.treatment,
+        total_amount: data.total_amount,
+        handoff_notes: data.handoff_notes
+      } as any)
+      .eq('id', entryId);
+
+    if (error) {
+      console.error('Handoff DB error:', error);
+    }
+
+    if (!error && activeSession) {
+      await fetchInCabinetEntries(activeSession.id);
+    }
+    return { error };
+  };
 
   const sortByPriority = (items: QueueEntry[]) => {
     return [...items].sort((a, b) => {
@@ -507,6 +534,7 @@ export function useQueue() {
     addClient,
     callClient,
     completeClient,
+    handoffConsultation,
     getStats,
     fetchEntries,
     fetchInCabinetEntries,

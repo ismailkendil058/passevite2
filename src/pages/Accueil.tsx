@@ -447,17 +447,31 @@ const Accueil = () => {
         setTranchePaid('');
         setSelectedHistoryTreatment(null);
       }
+
+      // 3. APPLY DOCTOR HANDOFF (OVERRIDE HISTORY IF DOCTOR PROVIDED DATA)
+      console.log('Checking handoff data for entry:', entry.id, {
+        treatment: entry.treatment,
+        amount: entry.total_amount,
+        notes: entry.handoff_notes
+      });
+
+      if (entry.treatment) {
+        setTreatment(entry.treatment);
+        setTotalAmount(entry.total_amount?.toString() || '');
+        setSelectedHistoryTreatment(entry.treatment);
+      }
+      if (entry.handoff_notes) {
+        setCompleteNotes(entry.handoff_notes);
+      } else {
+        setCompleteNotes('');
+      }
+
     } catch (err) {
       console.error('Error fetching history:', err);
-      setHistoryTreatments([]);
-      setTreatment('');
-      setTotalAmount('');
-      setTotalPaidPreviously(0);
-      setTranchePaid('');
-      setSelectedHistoryTreatment(null);
+      // fallback to safe defaults
+      setCompleteNotes('');
     }
 
-    setCompleteNotes('');
     setHasNextAppt(false);
     setNextApptDate(undefined);
     setNextApptTime('09:00');

@@ -16,7 +16,7 @@ import {
     PieChart, DollarSign, Activity, FileDown, Edit3,
     X, Printer, ClipboardList, CheckCircle2, ChevronRight,
     LayoutDashboard, MapPin, Phone, ArrowUpRight, User, Trash2,
-    Calendar as CalIcon, MessageSquare, XCircle, Pill
+    Calendar as CalIcon, MessageSquare, XCircle, UserCheck, Pill
 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -26,7 +26,23 @@ import { toast } from 'sonner';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
+import { useQueue, QueueEntry } from '@/hooks/useQueue';
 import { cn } from '@/lib/utils';
+import { Checkbox } from '@/components/ui/checkbox';
+
+const TREATMENTS = [
+    'Extraction simple',
+    'Extraction chirurgicale',
+    'Obturation (Plombage)',
+    'Traitement de canal',
+    'Détartrage & Polissage',
+    'Blanchiment dentaire',
+    'Prothèse fixe (Couronne)',
+    'Prothèse amovible',
+    'Implant dentaire',
+    'Appareil orthodontique',
+    'Consultation dentaire'
+];
 
 const COMMON_MEDICATIONS: Record<string, any> = {
     'Paracetamol 500mg': { dosage: '1 comprimé', duree: '3 jours', frequency_count: 3, timing: 'apres' },
@@ -43,7 +59,8 @@ const COMMON_MEDICATIONS: Record<string, any> = {
 
 const MedecinDashboard = () => {
     const navigate = useNavigate();
-    const { signOut } = useAuth();
+    const { user, signOut } = useAuth();
+    const { inCabinetEntries, completeClient, handoffConsultation, returnToQueue, doctors } = useQueue();
 
     // LOGGED IN DOCTOR INFO
     const [doctorInfo, setDoctorInfo] = useState<{ id: string, name: string } | null>(null);
@@ -107,11 +124,32 @@ const MedecinDashboard = () => {
         default_timing: 'apres'
     });
 
-    // TEMPLATES STATE
     const [templates, setTemplates] = useState<any[]>(() => {
         const saved = localStorage.getItem('ordonnance_templates');
         return saved ? JSON.parse(saved) : [];
     });
+
+    // COMPLETE MODAL STATE (from Accueil.tsx)
+    const [showCompleteModal, setShowCompleteModal] = useState(false);
+    const [selectedEntry, setSelectedEntry] = useState<QueueEntry | null>(null);
+    const [clientName, setClientName] = useState('');
+    const [treatment, setTreatment] = useState('');
+    const [totalAmount, setTotalAmount] = useState('');
+    const [tranchePaid, setTranchePaid] = useState('');
+    const [totalPaidPreviously, setTotalPaidPreviously] = useState(0);
+    const [completeNotes, setCompleteNotes] = useState('');
+    const [historyTreatments, setHistoryTreatments] = useState<Array<{ treatment: string; totalAmount: number; totalPaid: number }>>([]);
+    const [selectedHistoryTreatment, setSelectedHistoryTreatment] = useState<string | null>(null);
+    const [isCompletingClient, setIsCompletingClient] = useState(false);
+
+    const [hasNextAppt, setHasNextAppt] = useState(false);
+    const [nextApptDate, setNextApptDate] = useState<Date | undefined>(undefined);
+    const [nextApptTime, setNextApptTime] = useState('09:00');
+    const [nextApptDoctorId, setNextApptDoctorId] = useState('');
+    const [nextApptNote, setNextApptNote] = useState('');
+
+    const [treatmentsList, setTreatmentsList] = useState<string[]>(TREATMENTS);
+    const [showTreatmentSuggestions, setShowTreatmentSuggestions] = useState(false);
 
     const saveAsTemplate = () => {
         if (!ordonnanceForm.medications.some(m => m.name)) {
@@ -231,6 +269,23 @@ const MedecinDashboard = () => {
         };
     }, [doctorInfo, fetchDashboardData]);
 
+    // AUTO-SELECT CABINET PATIENT
+    useEffect(() => {
+        if (!doctorInfo) return;
+        const myCabinetEntries = inCabinetEntries.filter(e => e.doctor_id === doctorInfo.id);
+
+        // If we have patients but none selected, or the selected one is no longer in cabinet
+        if (myCabinetEntries.length > 0) {
+            const currentActive = myCabinetEntries[0];
+            if (!selectedEntry || !myCabinetEntries.find(e => e.id === selectedEntry.id)) {
+                handleCompleteClick(currentActive);
+            }
+        } else if (selectedEntry && !inCabinetEntries.find(e => e.id === selectedEntry.id)) {
+            // Selected patient is gone from cabinet
+            setSelectedEntry(null);
+        }
+    }, [inCabinetEntries, doctorInfo, selectedEntry]);
+
     const handleCreateMedication = async () => {
         if (!newMedForm.name) {
             toast.error('Veuillez entrer le nom du médicament');
@@ -297,6 +352,127 @@ const MedecinDashboard = () => {
             toast.error('Erreur: ' + err.message);
         } finally {
             setSavingOrdonnance(false);
+        }
+    };
+
+    const handleCompleteClick = async (entry: QueueEntry) => {
+        setSelectedEntry(entry);
+        setClientName(entry.patient_name || '');
+
+        try {
+            if (entry.state === 'R') {
+                const { data: history } = await supabase
+                    .from('completed_clients')
+                    .select('*')
+                    .eq('phone', entry.phone)
+                    .order('completed_at', { ascending: false });
+
+                if (history && history.length > 0) {
+                    const map = new Map<string, { totalPaid: number; totalAmount: number; lastDate: number }>();
+                    history.forEach((item: any) => {
+                        const key = item.treatment || '—';
+                        const existing = map.get(key) || { totalPaid: 0, totalAmount: 0, lastDate: 0 };
+                        existing.totalPaid += (item.tranche_paid || 0);
+                        const ts = new Date(item.completed_at).getTime();
+                        if (!existing.lastDate || ts > existing.lastDate) {
+                            existing.totalAmount = item.total_amount || 0;
+                            existing.lastDate = ts;
+                        }
+                        map.set(key, existing);
+                    });
+
+                    const treatmentsArr = Array.from(map.entries()).map(([treatment, v]) => ({
+                        treatment,
+                        totalAmount: v.totalAmount || 0,
+                        totalPaid: v.totalPaid || 0,
+                    }));
+
+                    setHistoryTreatments(treatmentsArr);
+                    const first = treatmentsArr[0];
+                    if (first) {
+                        setTreatment(first.treatment);
+                        setTotalAmount(first.totalAmount?.toString() || '');
+                        setTotalPaidPreviously(first.totalPaid || 0);
+                        setSelectedHistoryTreatment(first.treatment);
+                    } else {
+                        setTreatment('');
+                        setTotalAmount('');
+                        setTotalPaidPreviously(0);
+                        setSelectedHistoryTreatment(null);
+                    }
+                    setTranchePaid('');
+                } else {
+                    setHistoryTreatments([]);
+                    setTreatment('');
+                    setTotalAmount('');
+                    setTotalPaidPreviously(0);
+                    setTranchePaid('');
+                    setSelectedHistoryTreatment(null);
+                }
+            } else {
+                setHistoryTreatments([]);
+                setTreatment('');
+                setTotalAmount('');
+                setTotalPaidPreviously(0);
+                setTranchePaid('');
+                setSelectedHistoryTreatment(null);
+            }
+        } catch (err) {
+            console.error('Error fetching history:', err);
+            setHistoryTreatments([]);
+            setTreatment('');
+            setTotalAmount('');
+            setTotalPaidPreviously(0);
+            setTranchePaid('');
+            setSelectedHistoryTreatment(null);
+        }
+
+        setCompleteNotes('');
+        setHasNextAppt(false);
+        setNextApptDate(undefined);
+        setNextApptTime('09:00');
+        setNextApptDoctorId(entry.doctor_id);
+        setNextApptNote('');
+    };
+
+    const handleComplete = async () => {
+        if (!selectedEntry || !treatment || !totalAmount) {
+            toast.error('Veuillez définir le traitement et le montant');
+            return;
+        }
+        if (isCompletingClient) return;
+
+        setIsCompletingClient(true);
+
+        try {
+            const { error } = await handoffConsultation(
+                selectedEntry.id,
+                {
+                    treatment,
+                    total_amount: parseFloat(totalAmount) || 0,
+                    handoff_notes: completeNotes
+                }
+            );
+
+            if (error) {
+                console.error('Handoff error:', error);
+                toast.error('Erreur de transmission : ' + (error as any).message);
+                return;
+            }
+
+            toast.success(`Patient ${selectedEntry.patient_name} prêt pour l'accueil.`);
+
+            // Clear current selection and refresh
+            setSelectedEntry(null);
+            setTreatment('');
+            setTotalAmount('');
+            setCompleteNotes('');
+            fetchDashboardData();
+        } catch (error) {
+            console.error('Error in handleComplete:', error);
+            toast.error('Erreur lors de la confirmation');
+        } finally {
+            setIsCompletingClient(false);
         }
     };
 
@@ -513,8 +689,11 @@ const MedecinDashboard = () => {
             </header>
 
             <main className="p-4 lg:p-6 flex-1 space-y-6 w-full">
-                <Tabs defaultValue="ordonnances" className="w-full">
-                    <TabsList className="grid w-full grid-cols-4 bg-muted/50 p-1 rounded-xl h-12">
+                <Tabs defaultValue="cabinet" className="w-full">
+                    <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 bg-muted/50 p-1 rounded-xl h-auto md:h-12 gap-1">
+                        <TabsTrigger value="cabinet" className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                            <UserCheck className="h-4 w-4 mr-2" /> Cabinet
+                        </TabsTrigger>
                         <TabsTrigger value="ordonnances" className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm">
                             <FileText className="h-4 w-4 mr-2" /> Ordonnances
                         </TabsTrigger>
@@ -528,6 +707,191 @@ const MedecinDashboard = () => {
                             <PieChart className="h-4 w-4 mr-2" /> Analyses
                         </TabsTrigger>
                     </TabsList>
+
+                    {/* CABINET CONTENT */}
+                    <TabsContent value="cabinet" className="mt-8 animate-in fade-in slide-in-from-bottom-3 duration-500">
+                        {inCabinetEntries.filter(e => e.doctor_id === doctorInfo?.id).length > 0 ? (
+                            <div className="w-full">
+                                <Card className="border-none shadow-premium rounded-[2.5rem] overflow-hidden bg-white">
+                                    <div className="p-10 border-b bg-slate-50/50">
+                                        <div className="flex flex-col items-center text-center gap-4">
+                                            <div className="h-20 w-20 bg-primary/10 rounded-[2rem] flex items-center justify-center shadow-inner">
+                                                <UserCheck className="h-10 w-10 text-primary" />
+                                            </div>
+                                            <div>
+                                                <h2 className="text-3xl font-black italic text-slate-800 uppercase tracking-tight">Définir le traitement</h2>
+                                                <p className="text-xs text-slate-400 font-bold uppercase tracking-[0.3em] leading-tight mt-1">Patient · {selectedEntry?.patient_name}</p>
+                                            </div>
+
+                                            {inCabinetEntries.filter(e => e.doctor_id === doctorInfo?.id).length > 1 && (
+                                                <div className="mt-4 flex items-center gap-4 bg-white p-2.5 rounded-2xl border border-slate-100 shadow-sm">
+                                                    <span className="text-[10px] font-black uppercase text-slate-400 pl-2 tracking-widest">Choisir Patient :</span>
+                                                    <div className="flex gap-1.5">
+                                                        {inCabinetEntries.filter(e => e.doctor_id === doctorInfo?.id).map((entry, idx) => (
+                                                            <Button
+                                                                key={entry.id}
+                                                                variant={selectedEntry?.id === entry.id ? 'primary' : 'ghost'}
+                                                                className={cn(
+                                                                    "h-10 w-10 rounded-xl font-black text-xs p-0 transition-all",
+                                                                    selectedEntry?.id === entry.id ? "bg-primary text-white shadow-lg shadow-primary/20 scale-110" : "text-slate-400 hover:bg-slate-50"
+                                                                )}
+                                                                onClick={() => handleCompleteClick(entry)}
+                                                            >
+                                                                {idx + 1}
+                                                            </Button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <div className="p-10 bg-white">
+                                        <div className="max-w-2xl mx-auto space-y-12">
+                                            {/* HISTORIQUE */}
+                                            {historyTreatments.length > 0 && (
+                                                <div className="space-y-4 text-center">
+                                                    <p className="text-[11px] font-black uppercase tracking-widest text-slate-400">Historique des traitements</p>
+                                                    <div className="flex flex-col gap-2">
+                                                        {historyTreatments.map(ht => (
+                                                            <Button
+                                                                key={ht.treatment}
+                                                                variant={selectedHistoryTreatment === ht.treatment ? 'secondary' : 'outline'}
+                                                                className={cn(
+                                                                    "justify-between h-14 rounded-2xl border-slate-100 font-bold px-6 group transition-all",
+                                                                    selectedHistoryTreatment === ht.treatment ? "bg-primary/5 border-primary/20 text-primary ring-2 ring-primary/10" : "hover:bg-slate-50"
+                                                                )}
+                                                                onClick={() => {
+                                                                    if (selectedHistoryTreatment === ht.treatment) {
+                                                                        setSelectedHistoryTreatment(null);
+                                                                        setTreatment('');
+                                                                        setTotalAmount('');
+                                                                        setTotalPaidPreviously(0);
+                                                                    } else {
+                                                                        setSelectedHistoryTreatment(ht.treatment);
+                                                                        setTreatment(ht.treatment);
+                                                                        setTotalAmount(ht.totalAmount?.toString() || '');
+                                                                        setTotalPaidPreviously(ht.totalPaid || 0);
+                                                                    }
+                                                                }}
+                                                            >
+                                                                <span className="truncate">{ht.treatment}</span>
+                                                                <Badge variant="outline" className="border-none font-black text-[10px] bg-slate-100 text-slate-500 rounded-lg">
+                                                                    {(ht.totalPaid || 0).toLocaleString()} / {(ht.totalAmount || 0).toLocaleString()} DZD
+                                                                </Badge>
+                                                            </Button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* TRAITEMENT */}
+                                            <div className="space-y-3 text-center">
+                                                <label className="text-[11px] font-black uppercase tracking-widest text-slate-400">Traitement acte médical</label>
+                                                <div className="relative">
+                                                    <Input
+                                                        placeholder="Saisissez l'acte médical..."
+                                                        value={treatment}
+                                                        onChange={(e) => {
+                                                            setTreatment(e.target.value);
+                                                            setShowTreatmentSuggestions(true);
+                                                        }}
+                                                        onFocus={() => setShowTreatmentSuggestions(true)}
+                                                        onBlur={() => setTimeout(() => setShowTreatmentSuggestions(false), 200)}
+                                                        disabled={!!selectedHistoryTreatment}
+                                                        className="h-16 rounded-3xl border-slate-200 bg-white font-black px-8 text-lg text-center focus:ring-primary/20 shadow-sm"
+                                                    />
+                                                    {showTreatmentSuggestions && (
+                                                        <div className="absolute left-0 right-0 mt-2 bg-white border border-slate-100 rounded-3xl overflow-hidden shadow-2xl max-h-48 overflow-y-auto z-50 animate-in fade-in slide-in-from-top-2">
+                                                            {treatmentsList
+                                                                .filter(t => {
+                                                                    const q = treatment.trim().toLowerCase();
+                                                                    if (!q) return false;
+                                                                    return t.toLowerCase().includes(q);
+                                                                })
+                                                                .slice(0, 8)
+                                                                .map(s => (
+                                                                    <button
+                                                                        key={s}
+                                                                        type="button"
+                                                                        onMouseDown={(e) => { e.preventDefault(); setTreatment(s); setShowTreatmentSuggestions(false); }}
+                                                                        className="w-full text-center px-6 py-4 hover:bg-slate-50 font-black text-sm text-slate-700 transition-colors border-b last:border-0 border-slate-50"
+                                                                    >
+                                                                        {s}
+                                                                    </button>
+                                                                ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* MONTANT TOTAL */}
+                                            <div className="space-y-3 text-center">
+                                                <label className="text-[11px] font-black uppercase tracking-widest text-slate-400">Montant total (DZD)</label>
+                                                <Input
+                                                    placeholder="0"
+                                                    value={totalAmount}
+                                                    onChange={(e) => setTotalAmount(e.target.value)}
+                                                    type="number"
+                                                    disabled={!!selectedHistoryTreatment}
+                                                    className="h-16 rounded-3xl border-slate-200 bg-slate-50/50 font-black text-slate-700 text-center text-xl shadow-inner"
+                                                />
+                                            </div>
+
+                                            {/* RESTE À PAYER BLOCO */}
+                                            {totalAmount && (
+                                                <div className="flex flex-col items-center justify-center p-8 bg-rose-50 rounded-[2.5rem] border border-rose-100/50 animate-in fade-in slide-in-from-top-4">
+                                                    <div className="flex items-center gap-2 mb-2">
+                                                        <div className="h-2 w-2 rounded-full bg-rose-500 animate-pulse" />
+                                                        <span className="text-[10px] font-black uppercase text-rose-600 tracking-[0.2em]">Reste à payer</span>
+                                                    </div>
+                                                    <span className="text-4xl font-black text-rose-700 tracking-tighter">
+                                                        {(parseFloat(totalAmount) - totalPaidPreviously).toLocaleString()} <span className="text-sm opacity-60">DZD</span>
+                                                    </span>
+                                                </div>
+                                            )}
+
+                                            {/* NOTE */}
+                                            <div className="space-y-3 text-center">
+                                                <label className="text-[11px] font-black uppercase tracking-widest text-slate-400">Note observationnelle</label>
+                                                <Input
+                                                    placeholder="Observations, détails du soin..."
+                                                    value={completeNotes}
+                                                    onChange={(e) => setCompleteNotes(e.target.value)}
+                                                    className="h-16 rounded-3xl border-slate-200 bg-white font-black px-8 text-center text-slate-600 shadow-sm"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="p-10 border-t bg-slate-50/50 flex justify-center">
+                                        <Button
+                                            onClick={handleComplete}
+                                            disabled={isCompletingClient}
+                                            className="h-16 rounded-[2rem] font-black px-24 shadow-2xl shadow-primary/30 bg-primary hover:bg-primary/90 text-white transition-all text-base uppercase tracking-[0.2em] w-full sm:w-auto"
+                                        >
+                                            {isCompletingClient ? 'Enregistrement...' : 'Confirmer'}
+                                        </Button>
+                                    </div>
+                                </Card>
+                            </div>
+                        ) : (
+                            <div className="py-24 text-center bg-white rounded-[3rem] border-2 border-dashed border-slate-100 flex flex-col items-center max-w-xl mx-auto shadow-sm">
+                                <div className="h-20 w-20 bg-orange-50 rounded-full flex items-center justify-center mb-6">
+                                    <UserCheck className="h-10 w-10 text-orange-200" />
+                                </div>
+                                <h3 className="text-xl font-black text-slate-400 uppercase tracking-widest mb-2">Cabinet Vide</h3>
+                                <p className="text-xs text-slate-400 font-medium max-w-[280px] mx-auto">Aucun patient n'est actuellement en consultation.</p>
+                                <Button
+                                    variant="ghost"
+                                    className="mt-8 text-[10px] font-black uppercase text-primary bg-primary/5 rounded-full px-6 hover:bg-primary/10"
+                                    onClick={() => fetchDashboardData()}
+                                >
+                                    Actualiser
+                                </Button>
+                            </div>
+                        )}
+                    </TabsContent>
 
                     {/* ORDONNANCES CONTENT */}
                     <TabsContent value="ordonnances" className="mt-6 animate-in fade-in slide-in-from-bottom-2">
@@ -766,10 +1130,10 @@ const MedecinDashboard = () => {
                         </div>
                     </TabsContent>
                 </Tabs>
-            </main>
+            </main >
 
             {/* FICHE MALADE DIALOG */}
-            <Dialog open={isPatientDialogOpen} onOpenChange={setIsPatientDialogOpen}>
+            < Dialog open={isPatientDialogOpen} onOpenChange={setIsPatientDialogOpen} >
                 <DialogContent className="max-w-3xl overflow-hidden rounded-3xl p-0 border shadow-2xl bg-white animate-in zoom-in-95 duration-200">
                     {selectedPatient && (
                         <div className="flex flex-col h-[85vh]">
@@ -908,7 +1272,7 @@ const MedecinDashboard = () => {
                         </div>
                     )}
                 </DialogContent>
-            </Dialog>
+            </Dialog >
 
             <Dialog open={!!viewingNote} onOpenChange={(open) => !open && setViewingNote(null)}>
                 <DialogContent className="max-w-sm w-[90vw] rounded-2xl p-6 shadow-2xl border-none">
@@ -1109,6 +1473,7 @@ const MedecinDashboard = () => {
                 </DialogContent>
             </Dialog>
 
+
             {/* ADD NEW MEDICATION MODAL */}
             <Dialog open={showNewMedModal} onOpenChange={setShowNewMedModal}>
                 <DialogContent className="max-w-md rounded-[2.5rem] p-0 border-none shadow-2xl overflow-hidden bg-white z-[100]">
@@ -1159,7 +1524,7 @@ const MedecinDashboard = () => {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
-        </div>
+        </div >
     );
 };
 
