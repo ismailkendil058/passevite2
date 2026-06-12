@@ -370,6 +370,13 @@ const Accueil = () => {
   }, [newPhone, newPatientName, newState, linkedAppointmentId]);
 
   const handleNext = async (entry: QueueEntry) => {
+    // Prevent calling a patient if the doctor already has someone in the cabinet
+    const activeDoctorEntry = inCabinetEntries.find(e => e.doctor_id === entry.doctor_id);
+    if (activeDoctorEntry) {
+      toast.error(`Le docteur ${entry.doctor?.name || ''} a déjà un patient au cabinet (${activeDoctorEntry.client_id}).`);
+      return;
+    }
+
     // Call client - move from waiting to in_cabinet
     const { error } = await callClient(entry.id);
     if (error) {
