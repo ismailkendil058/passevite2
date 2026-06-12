@@ -133,6 +133,47 @@ const MedecinDashboard = () => {
     const [showCompleteModal, setShowCompleteModal] = useState(false);
     const [selectedEntry, setSelectedEntry] = useState<QueueEntry | null>(null);
     const [clientName, setClientName] = useState('');
+    const [ecNotes, setEcNotes] = useState('');
+
+    // Multi-act state
+    const [selectedActs, setSelectedActs] = useState<{ name: string; price: number }[]>([]);
+    const [isAddActOpen, setIsAddActOpen] = useState(false);
+    const [newActName, setNewActName] = useState('');
+    const [newActPrice, setNewActPrice] = useState('');
+    const [showAddActSuggestions, setShowAddActSuggestions] = useState(false);
+
+    // Dental Chart state
+    const [selectedTeeth, setSelectedTeeth] = useState<number[]>([]);
+
+    const toggleTooth = (num: number) => {
+        setSelectedTeeth(prev => prev.includes(num) ? prev.filter(n => n !== num) : [...prev, num]);
+    };
+
+    const addAct = () => {
+        if (!newActName || !newActPrice) return;
+        const price = parseFloat(newActPrice) || 0;
+        const newActs = [...selectedActs, { name: newActName, price }];
+        setSelectedActs(newActs);
+
+        // Update combined fields
+        const combinedTreatment = newActs.map(a => a.name).join(' + ');
+        setTreatment(combinedTreatment);
+        const total = newActs.reduce((sum, a) => sum + a.price, 0);
+        setTotalAmount(total.toString());
+
+        // Reset and close
+        setNewActName('');
+        setNewActPrice('');
+        setIsAddActOpen(false);
+    };
+
+    const removeAct = (index: number) => {
+        const newActs = selectedActs.filter((_, i) => i !== index);
+        setSelectedActs(newActs);
+        setTreatment(newActs.map(a => a.name).join(' + '));
+        const total = newActs.reduce((sum, a) => sum + a.price, 0);
+        setTotalAmount(total.toString());
+    };
     const [treatment, setTreatment] = useState('');
     const [totalAmount, setTotalAmount] = useState('');
     const [tranchePaid, setTranchePaid] = useState('');
@@ -433,6 +474,8 @@ const MedecinDashboard = () => {
         setNextApptTime('09:00');
         setNextApptDoctorId(entry.doctor_id);
         setNextApptNote('');
+        setSelectedActs([]); // Reset multi-act list
+        setSelectedTeeth([]); // Reset selected teeth
     };
 
     const handleComplete = async () => {
@@ -710,6 +753,10 @@ const MedecinDashboard = () => {
 
                     {/* CABINET CONTENT */}
                     <TabsContent value="cabinet" className="mt-8 animate-in fade-in slide-in-from-bottom-3 duration-500">
+                        <div className="mb-8 px-2">
+                            <h1 className="text-2xl font-black italic text-slate-800">Gestion des Traitements</h1>
+                        </div>
+
                         {inCabinetEntries.filter(e => e.doctor_id === doctorInfo?.id).length > 0 ? (
                             <div className="w-full">
                                 <Card className="border-none shadow-premium rounded-[2.5rem] overflow-hidden bg-white">
@@ -730,7 +777,7 @@ const MedecinDashboard = () => {
                                                         {inCabinetEntries.filter(e => e.doctor_id === doctorInfo?.id).map((entry, idx) => (
                                                             <Button
                                                                 key={entry.id}
-                                                                variant={selectedEntry?.id === entry.id ? 'primary' : 'ghost'}
+                                                                variant={selectedEntry?.id === entry.id ? 'default' : 'ghost'}
                                                                 className={cn(
                                                                     "h-10 w-10 rounded-xl font-black text-xs p-0 transition-all",
                                                                     selectedEntry?.id === entry.id ? "bg-primary text-white shadow-lg shadow-primary/20 scale-110" : "text-slate-400 hover:bg-slate-50"
@@ -785,9 +832,150 @@ const MedecinDashboard = () => {
                                                 </div>
                                             )}
 
-                                            {/* TRAITEMENT */}
+                                            {/* MULTI-ACTS SECTION */}
+                                            <div className="space-y-4">
+                                                <div className="flex items-center justify-between px-2">
+                                                    <p className="text-[11px] font-black uppercase tracking-widest text-slate-400">Actes réalisés ({selectedActs.length})</p>
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => setIsAddActOpen(true)}
+                                                        className="h-8 rounded-xl border-primary/20 text-primary font-bold px-4 hover:bg-primary/5"
+                                                    >
+                                                        <Plus className="h-3.5 w-3.5 mr-1.5" /> Ajouter un acte
+                                                    </Button>
+                                                </div>
+
+                                                {selectedActs.length > 0 && (
+                                                    <div className="space-y-2">
+                                                        {selectedActs.map((act, idx) => (
+                                                            <div key={idx} className="flex items-center justify-between p-4 bg-slate-50 border border-slate-100 rounded-2xl animate-in fade-in slide-in-from-top-2">
+                                                                <div className="flex items-center gap-3">
+                                                                    <div className="h-2 w-2 rounded-full bg-primary" />
+                                                                    <span className="font-bold text-slate-700">{act.name}</span>
+                                                                </div>
+                                                                <div className="flex items-center gap-4">
+                                                                    <span className="font-black text-primary">{act.price.toLocaleString()} DZD</span>
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="icon"
+                                                                        onClick={() => removeAct(idx)}
+                                                                        className="h-8 w-8 text-slate-300 hover:text-rose-500 rounded-full"
+                                                                    >
+                                                                        <X className="h-4 w-4" />
+                                                                    </Button>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* DENTAL CHART SECTION */}
+                                            <div className="space-y-6 py-6 border-y border-slate-100/50 bg-slate-50/30 rounded-[2.5rem] -mx-4 px-4 overflow-x-auto no-scrollbar">
+                                                <p className="text-[11px] font-black uppercase tracking-[0.3em] text-slate-400 text-center mb-4">Schéma Dentaire Anatomique</p>
+                                                <div className="min-w-[600px] flex flex-col gap-8 items-center py-4">
+                                                    {/* UPPER ARCH */}
+                                                    <div className="flex gap-4 sm:gap-6 items-end">
+                                                        <div className="flex gap-1.5 items-end px-4 border-r border-slate-200">
+                                                            {[18, 17, 16, 15, 14, 13, 12, 11].map(num => {
+                                                                const isMolar = [18, 17, 16].includes(num);
+                                                                const isPremolar = [15, 14].includes(num);
+                                                                const isCanine = [13].includes(num);
+                                                                const isIncisor = [12, 11].includes(num);
+                                                                return (
+                                                                    <div key={num} onClick={() => toggleTooth(num)} className={cn("flex flex-col items-center gap-2 cursor-pointer transition-all hover:scale-110", selectedTeeth.includes(num) ? "text-primary" : "text-slate-300")}>
+                                                                        <svg width="28" height="36" viewBox="0 0 28 36" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                                                            {isMolar && <path d="M5 12c0-4 3-8 9-8s9 4 9 8v12c0 5-3 8-9 8s-9-3-9-8V12zM8 4c0-2 2-3 6-3s6 1 6 3M5 18h18" fill={selectedTeeth.includes(num) ? 'currentColor' : 'none'} fillOpacity="0.15" />}
+                                                                            {isPremolar && <path d="M7 10c0-4 2-7 7-7s7 3 7 7v14c0 4-2 7-7 7s-7-3-7-7V10zM10 3c0-2 1-2 4-2s4 0 4 2" fill={selectedTeeth.includes(num) ? 'currentColor' : 'none'} fillOpacity="0.15" />}
+                                                                            {isCanine && <path d="M14 2c-4 0-7 4-7 10v16c0 4 3 6 7 6s7-2 7-6V12c0-6-3-10-7-10z" fill={selectedTeeth.includes(num) ? 'currentColor' : 'none'} fillOpacity="0.15" />}
+                                                                            {isIncisor && <path d="M8 2h12v24c0 4-3 6-6 6s-6-2-6-6V2z" fill={selectedTeeth.includes(num) ? 'currentColor' : 'none'} fillOpacity="0.15" />}
+                                                                        </svg>
+                                                                        <span className={cn("text-[10px] font-black", selectedTeeth.includes(num) ? "text-primary" : "text-slate-400")}>{num}</span>
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                        <div className="flex gap-1.5 items-end px-4">
+                                                            {[21, 22, 23, 24, 25, 26, 27, 28].map(num => {
+                                                                const isMolar = [26, 27, 28].includes(num);
+                                                                const isPremolar = [24, 25].includes(num);
+                                                                const isCanine = [23].includes(num);
+                                                                const isIncisor = [21, 22].includes(num);
+                                                                return (
+                                                                    <div key={num} onClick={() => toggleTooth(num)} className={cn("flex flex-col items-center gap-2 cursor-pointer transition-all hover:scale-110", selectedTeeth.includes(num) ? "text-primary" : "text-slate-300")}>
+                                                                        <svg width="28" height="36" viewBox="0 0 28 36" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                                                            {isMolar && <path d="M5 12c0-4 3-8 9-8s9 4 9 8v12c0 5-3 8-9 8s-9-3-9-8V12zM8 4c0-2 2-3 6-3s6 1 6 3M5 18h18" fill={selectedTeeth.includes(num) ? 'currentColor' : 'none'} fillOpacity="0.15" />}
+                                                                            {isPremolar && <path d="M7 10c0-4 2-7 7-7s7 3 7 7v14c0 4-2 7-7 7s-7-3-7-7V10zM10 3c0-2 1-2 4-2s4 0 4 2" fill={selectedTeeth.includes(num) ? 'currentColor' : 'none'} fillOpacity="0.15" />}
+                                                                            {isCanine && <path d="M14 2c-4 0-7 4-7 10v16c0 4 3 6 7 6s7-2 7-6V12c0-6-3-10-7-10z" fill={selectedTeeth.includes(num) ? 'currentColor' : 'none'} fillOpacity="0.15" />}
+                                                                            {isIncisor && <path d="M8 2h12v24c0 4-3 6-6 6s-6-2-6-6V2z" fill={selectedTeeth.includes(num) ? 'currentColor' : 'none'} fillOpacity="0.15" />}
+                                                                        </svg>
+                                                                        <span className={cn("text-[10px] font-black", selectedTeeth.includes(num) ? "text-primary" : "text-slate-400")}>{num}</span>
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="w-full h-px bg-slate-100 max-w-xl" />
+
+                                                    {/* LOWER ARCH */}
+                                                    <div className="flex gap-4 sm:gap-6 items-start">
+                                                        <div className="flex gap-1.5 items-start px-4 border-r border-slate-200">
+                                                            {[48, 47, 46, 45, 44, 43, 42, 41].map(num => {
+                                                                const isMolar = [48, 47, 46].includes(num);
+                                                                const isPremolar = [45, 44].includes(num);
+                                                                const isCanine = [43].includes(num);
+                                                                const isIncisor = [42, 41].includes(num);
+                                                                return (
+                                                                    <div key={num} onClick={() => toggleTooth(num)} className={cn("flex flex-col items-center gap-2 cursor-pointer transition-all hover:scale-110", selectedTeeth.includes(num) ? "text-primary" : "text-slate-300")}>
+                                                                        <span className={cn("text-[10px] font-black", selectedTeeth.includes(num) ? "text-primary" : "text-slate-400")}>{num}</span>
+                                                                        <svg width="28" height="36" viewBox="0 0 28 36" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                                                            {isMolar && <path d="M5 24c0 4 3 8 9 8s9-4 9-8V12c0-5-3-8-9-8s-9 3-9 8v12zM8 32c0 2 2 3 6 3s6-1 6-3M5 18h18" fill={selectedTeeth.includes(num) ? 'currentColor' : 'none'} fillOpacity="0.15" />}
+                                                                            {isPremolar && <path d="M7 26c0 4 2 7 7 7s7-3 7-7V12c0-4-2-7-7-7s-7 3-7 7v14zM10 33c0 2 1 2 4 2s4 0 4-2" fill={selectedTeeth.includes(num) ? 'currentColor' : 'none'} fillOpacity="0.15" />}
+                                                                            {isCanine && <path d="M14 34c-4 0-7-4-7-10V8c0-4 3-6 7-6s7 2 7 6v16c0 6-3 10-7 10z" fill={selectedTeeth.includes(num) ? 'currentColor' : 'none'} fillOpacity="0.15" />}
+                                                                            {isIncisor && <path d="M8 34h12V10c0-4-3-6-6-6s-6 2-6 6v24z" fill={selectedTeeth.includes(num) ? 'currentColor' : 'none'} fillOpacity="0.15" />}
+                                                                        </svg>
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                        <div className="flex gap-1.5 items-start px-4">
+                                                            {[31, 32, 33, 34, 35, 36, 37, 38].map(num => {
+                                                                const isMolar = [36, 37, 38].includes(num);
+                                                                const isPremolar = [34, 35].includes(num);
+                                                                const isCanine = [33].includes(num);
+                                                                const isIncisor = [31, 32].includes(num);
+                                                                return (
+                                                                    <div key={num} onClick={() => toggleTooth(num)} className={cn("flex flex-col items-center gap-2 cursor-pointer transition-all hover:scale-110", selectedTeeth.includes(num) ? "text-primary" : "text-slate-300")}>
+                                                                        <span className={cn("text-[10px] font-black", selectedTeeth.includes(num) ? "text-primary" : "text-slate-400")}>{num}</span>
+                                                                        <svg width="28" height="36" viewBox="0 0 28 36" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                                                            {isMolar && <path d="M5 24c0 4 3 8 9 8s9-4 9-8V12c0-5-3-8-9-8s-9 3-9 8v12zM8 32c0 2 2 3 6 3s6-1 6-3M5 18h18" fill={selectedTeeth.includes(num) ? 'currentColor' : 'none'} fillOpacity="0.15" />}
+                                                                            {isPremolar && <path d="M7 26c0 4 2 7 7 7s7-3 7-7V12c0-4-2-7-7-7s-7 3-7 7v14zM10 33c0 2 1 2 4 2s4 0 4-2" fill={selectedTeeth.includes(num) ? 'currentColor' : 'none'} fillOpacity="0.15" />}
+                                                                            {isCanine && <path d="M14 34c-4 0-7-4-7-10V8c0-4 3-6 7-6s7 2 7 6v16c0 6-3 10-7 10z" fill={selectedTeeth.includes(num) ? 'currentColor' : 'none'} fillOpacity="0.15" />}
+                                                                            {isIncisor && <path d="M8 34h12V10c0-4-3-6-6-6s-6 2-6 6v24z" fill={selectedTeeth.includes(num) ? 'currentColor' : 'none'} fillOpacity="0.15" />}
+                                                                        </svg>
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                {selectedTeeth.length > 0 && (
+                                                    <div className="flex flex-wrap justify-center gap-2 mt-4">
+                                                        <Badge variant="outline" className="rounded-full bg-primary/5 text-primary border-primary/20 font-black animate-in zoom-in-95">
+                                                            {selectedTeeth.length} dent{selectedTeeth.length > 1 ? 's' : ''} sélectionnée{selectedTeeth.length > 1 ? 's' : ''} : {selectedTeeth.sort((a, b) => a - b).join(', ')}
+                                                        </Badge>
+                                                        <Button variant="ghost" size="sm" onClick={() => setSelectedTeeth([])} className="h-6 text-[10px] font-bold text-rose-500 hover:bg-rose-50 rounded-full px-3">
+                                                            Réinitialiser
+                                                        </Button>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* TRAITEMENT (READ-ONLY IF ACTS EXIST) */}
                                             <div className="space-y-3 text-center">
-                                                <label className="text-[11px] font-black uppercase tracking-widest text-slate-400">Traitement acte médical</label>
+                                                <label className="text-[11px] font-black uppercase tracking-widest text-slate-400">Détails du Traitement</label>
                                                 <div className="relative">
                                                     <Input
                                                         placeholder="Saisissez l'acte médical..."
@@ -876,7 +1064,7 @@ const MedecinDashboard = () => {
                                 </Card>
                             </div>
                         ) : (
-                            <div className="py-24 text-center bg-white rounded-[3rem] border-2 border-dashed border-slate-100 flex flex-col items-center max-w-xl mx-auto shadow-sm">
+                            <div className="py-24 text-center bg-white rounded-[3rem] border-2 border-dashed border-slate-100 flex flex-col items-center w-full shadow-sm">
                                 <div className="h-20 w-20 bg-primary/10 rounded-full flex items-center justify-center mb-6">
                                     <UserCheck className="h-10 w-10 text-primary/30" />
                                 </div>
@@ -1124,7 +1312,64 @@ const MedecinDashboard = () => {
                         </div>
                     </TabsContent>
                 </Tabs>
-            </main >
+
+                {/* ADD ACT MODAL */}
+                <Dialog open={isAddActOpen} onOpenChange={setIsAddActOpen}>
+                    <DialogContent className="max-w-md rounded-[2.5rem] p-0 border-none shadow-2xl overflow-hidden bg-white z-[120]">
+                        <DialogHeader className="p-8 border-b bg-primary/5 text-center">
+                            <DialogTitle className="text-xl font-black italic text-primary">Ajouter un acte médical</DialogTitle>
+                        </DialogHeader>
+                        <div className="p-8 space-y-6">
+                            <div className="space-y-3">
+                                <label className="text-[11px] font-black uppercase tracking-widest text-slate-400">Nom de l'acte</label>
+                                <div className="relative">
+                                    <Input
+                                        placeholder="Ex: Plombage..."
+                                        value={newActName}
+                                        onChange={(e) => {
+                                            setNewActName(e.target.value);
+                                            setShowAddActSuggestions(true);
+                                        }}
+                                        onFocus={() => setShowAddActSuggestions(true)}
+                                        className="h-12 rounded-2xl border-slate-200 font-bold px-6"
+                                    />
+                                    {showAddActSuggestions && newActName.trim() && (
+                                        <div className="absolute left-0 right-0 mt-2 bg-white border border-slate-100 rounded-2xl overflow-hidden shadow-2xl max-h-48 overflow-y-auto z-[130]">
+                                            {TREATMENTS.filter(t => t.toLowerCase().includes(newActName.toLowerCase())).map(t => (
+                                                <button
+                                                    key={t}
+                                                    type="button"
+                                                    onMouseDown={(e) => { e.preventDefault(); setNewActName(t); setShowAddActSuggestions(false); }}
+                                                    className="w-full text-left px-6 py-3 hover:bg-slate-50 font-bold text-xs text-slate-700 transition-colors border-b last:border-0 border-slate-50"
+                                                >
+                                                    {t}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                            <div className="space-y-3">
+                                <label className="text-[11px] font-black uppercase tracking-widest text-slate-400">Montant (DZD)</label>
+                                <Input
+                                    type="number"
+                                    placeholder="0"
+                                    value={newActPrice}
+                                    onChange={(e) => setNewActPrice(e.target.value)}
+                                    className="h-12 rounded-2xl border-slate-200 font-bold px-6"
+                                />
+                            </div>
+                            <Button
+                                onClick={addAct}
+                                disabled={!newActName || !newActPrice}
+                                className="w-full h-14 rounded-2xl bg-primary text-white font-black shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all"
+                            >
+                                Ajouter
+                            </Button>
+                        </div>
+                    </DialogContent>
+                </Dialog>
+            </main>
 
             {/* FICHE MALADE DIALOG */}
             < Dialog open={isPatientDialogOpen} onOpenChange={setIsPatientDialogOpen} >
@@ -1518,7 +1763,7 @@ const MedecinDashboard = () => {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
-        </div >
+        </div>
     );
 };
 
