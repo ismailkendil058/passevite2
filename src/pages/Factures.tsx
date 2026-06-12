@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, Plus, FileText, Calendar, Search, Download, Trash2, Tag, Filter } from 'lucide-react';
+import { ArrowLeft, Plus, FileText, Calendar, Search, Download, Trash2, Tag, Filter, Package } from 'lucide-react';
+
 import { Link, useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -104,6 +105,11 @@ const Factures = () => {
                     <Button asChild variant="default" size="sm" className="h-8 sm:h-9 px-3 gap-1 rounded-full font-bold uppercase tracking-widest text-[10px]">
                         <Link to="/manager/factures/ajouter">
                             <Plus className="h-3.5 w-3.5" /> Facture
+                        </Link>
+                    </Button>
+                    <Button asChild variant="outline" size="sm" className="h-8 sm:h-9 px-3 gap-1 rounded-full font-bold uppercase tracking-widest text-[10px] bg-amber-500/5 text-amber-600 border-amber-500/20">
+                        <Link to="/inventaire">
+                            <Package className="h-3.5 w-3.5" /> Stock
                         </Link>
                     </Button>
                 </div>

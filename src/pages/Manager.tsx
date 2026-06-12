@@ -7,7 +7,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { FeedbackStats } from '@/components/FeedbackStats';
-import { LogOut, Search, Download, Users, DollarSign, Stethoscope, Calendar, ShieldCheck } from 'lucide-react';
+import { LogOut, Search, Download, Users, DollarSign, Stethoscope, Calendar, ShieldCheck, Package } from 'lucide-react';
+
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -25,10 +26,10 @@ interface CompletedClient {
   completed_at: string;
   receptionist_id: string;
   doctor: { name: string; initial: string } | null;
-  receptionist_email?: string;
 }
 
 const Manager = () => {
+
   const { signOut } = useAuth();
   const [clients, setClients] = useState<CompletedClient[]>([]);
   const [doctors, setDoctors] = useState<{ id: string; name: string }[]>([]);
@@ -56,18 +57,20 @@ const Manager = () => {
 
     if (data) {
       const uniqueIds = [...new Set(data.map(d => d.receptionist_id))];
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('id, email')
+      const { data: userRoles } = await (supabase as any)
+        .from('roles')
+        .select('id, username')
         .in('id', uniqueIds);
 
-      const emailMap = new Map(profiles?.map(p => [p.id, p.email]) || []);
+      const nameMap = new Map(userRoles?.map(r => [r.id, r.username]) || []);
 
       setClients(data.map(c => ({
         ...c,
         doctor: c.doctor as any,
-        receptionist_email: emailMap.get(c.receptionist_id) || '—',
+        receptionist_name: (nameMap.get(c.receptionist_id) as string) || '—',
       })));
+
+
     }
 
     const { data: expData } = await supabase
@@ -91,22 +94,23 @@ const Manager = () => {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  // Realtime subscriptions + polling fallback
   useEffect(() => {
+    // Realtime subscriptions for instant sync across devices
     const channel = supabase
       .channel('manager-live-updates')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'completed_clients' }, () => fetchData())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'expenses' }, () => fetchData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'completed_clients' }, () => {
+        fetchData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'expenses' }, () => {
+        fetchData();
+      })
       .subscribe();
 
-    // Polling fallback: refresh every 5 seconds
-    const pollInterval = setInterval(() => fetchData(), 5000);
-
     return () => {
-      clearInterval(pollInterval);
       supabase.removeChannel(channel);
     };
   }, [fetchData]);
+
 
   const treatments = useMemo(() => {
     const set = new Set(clients.map(c => c.treatment));
@@ -154,7 +158,8 @@ const Manager = () => {
       c.treatment,
       c.total_amount,
       c.tranche_paid,
-      c.receptionist_email || '',
+      c.receptionist_name || '',
+
       format(new Date(c.completed_at), 'dd/MM/yyyy HH:mm'),
     ]);
 
@@ -196,6 +201,7 @@ const Manager = () => {
             </Link>
           </Button>
           <Button variant="ghost" size="icon" onClick={signOut} className="h-8 w-8 hover:text-rose-500 transition-colors"><LogOut className="h-4 w-4" /></Button>
+
         </div>
       </header>
 
@@ -259,16 +265,7 @@ const Manager = () => {
               <p className="text-xl sm:text-2xl font-bold text-foreground">{analytics.totalClients}</p>
             </CardContent>
           </Card>
-          <Card className="border-0 shadow-sm">
-            <CardContent className="p-3 sm:p-4">
-              <div className="flex items-center gap-1.5 sm:gap-2 mb-1 sm:mb-2">
-                <DollarSign className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary" />
-                <span className="text-xs text-muted-foreground">Revenus</span>
-              </div>
-              <p className="text-lg sm:text-2xl font-bold text-foreground">{analytics.totalRevenue.toLocaleString()}</p>
-              <p className="text-xs text-muted-foreground">DZD</p>
-            </CardContent>
-          </Card>
+
           <Card className="border-0 shadow-sm">
             <CardContent className="p-3 sm:p-4">
               <div className="flex items-center gap-1.5 sm:gap-2 mb-1 sm:mb-2">
@@ -298,17 +295,8 @@ const Manager = () => {
               <p className="text-xs text-muted-foreground">DZD</p>
             </CardContent>
           </Card>
-          <Card className="border-0 shadow-sm bg-primary/5">
-            <CardContent className="p-3 sm:p-4">
-              <div className="flex items-center gap-1.5 sm:gap-2 mb-1 sm:mb-2">
-                <DollarSign className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary" />
-                <span className="text-xs text-muted-foreground">Profit</span>
-              </div>
-              <p className="text-lg sm:text-2xl font-bold text-primary">{(analytics.totalPaid - totalExpenses).toLocaleString()}</p>
-              <p className="text-xs text-muted-foreground">DZD (Net)</p>
-            </CardContent>
-          </Card>
         </div>
+
 
 
         {/* Per Doctor Stats */}
@@ -371,14 +359,15 @@ const Manager = () => {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Nom</TableHead>
-                  <TableHead>Tél.</TableHead>
-                  <TableHead>Docteur</TableHead>
-                  <TableHead>Traitement</TableHead>
-                  <TableHead className="text-right">Montant</TableHead>
-                  <TableHead className="text-right">Payé</TableHead>
-                  <TableHead>Réception</TableHead>
-                  <TableHead>Date</TableHead>
+                  <TableHead className="text-center">Nom</TableHead>
+                  <TableHead className="text-center">Tél.</TableHead>
+                  <TableHead className="text-center">Docteur</TableHead>
+                  <TableHead className="text-center">Traitement</TableHead>
+                  <TableHead className="text-center">Montant</TableHead>
+                  <TableHead className="text-center">Payé</TableHead>
+                  <TableHead className="text-center">Réception</TableHead>
+                  <TableHead className="text-center">Date</TableHead>
+
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -393,19 +382,21 @@ const Manager = () => {
                 ) : (
                   filtered.map(c => (
                     <TableRow key={c.id}>
-                      <TableCell className="font-medium">{c.client_name}</TableCell>
-                      <TableCell>
+                      <TableCell className="font-medium text-center">{c.client_name}</TableCell>
+                      <TableCell className="text-center">
                         <a href={`tel:${c.phone}`} className="text-primary">{c.phone}</a>
                       </TableCell>
-                      <TableCell>{c.doctor?.name || '—'}</TableCell>
-                      <TableCell>{c.treatment}</TableCell>
-                      <TableCell className="text-right">{c.total_amount?.toLocaleString()} DZD</TableCell>
-                      <TableCell className="text-right">{c.tranche_paid?.toLocaleString()} DZD</TableCell>
-                      <TableCell className="text-xs">{c.receptionist_email}</TableCell>
-                      <TableCell className="text-xs">
+                      <TableCell className="text-center">{c.doctor?.name || '—'}</TableCell>
+                      <TableCell className="text-center">{c.treatment}</TableCell>
+                      <TableCell className="text-center font-semibold">{c.total_amount?.toLocaleString()} DZD</TableCell>
+                      <TableCell className="text-center font-semibold">{c.tranche_paid?.toLocaleString()} DZD</TableCell>
+                      <TableCell className="text-xs text-center">{c.receptionist_name}</TableCell>
+
+                      <TableCell className="text-xs text-center">
                         {format(new Date(c.completed_at), 'dd/MM/yyyy HH:mm', { locale: fr })}
                       </TableCell>
                     </TableRow>
+
                   ))
                 )}
               </TableBody>

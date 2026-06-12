@@ -574,6 +574,16 @@ const Rendezvous = () => {
         });
     }, [parsedAppointments, apptStatusFilter]);
 
+    const totalApptsForDay = useMemo(() => {
+        if (!newApptDate) return 0;
+        const dayStart = startOfDay(newApptDate).getTime();
+        return parsedAppointments.filter(a =>
+            a.startOfDayTime === dayStart &&
+            a.status !== 'denied' &&
+            a.status !== 'attended'
+        ).length;
+    }, [newApptDate, parsedAppointments]);
+
     const handleUpdateStatus = async (id: string, status: Appointment['status']) => {
         const { error } = await supabase
             .from('appointments')
@@ -1541,10 +1551,31 @@ const Rendezvous = () => {
                                             </div>
                                             <div>
                                                 <h3 className="font-black italic text-base sm:text-xl text-primary leading-tight">Vue Docteur</h3>
-                                                <p className="text-[10px] sm:text-xs text-muted-foreground uppercase font-bold tracking-widest opacity-60">Agenda Global</p>
+                                                <div className="flex items-center gap-2">
+                                                    <p className="text-[10px] sm:text-xs text-muted-foreground uppercase font-bold tracking-widest opacity-60">Agenda Global</p>
+                                                    <span className="text-muted-foreground/30 px-1">•</span>
+                                                    <p className="text-[10px] sm:text-xs text-primary font-black uppercase tracking-widest">{totalApptsForDay} RDV</p>
+                                                </div>
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-2">
+                                            <Popover>
+                                                <PopoverTrigger asChild>
+                                                    <Button variant="outline" className="h-9 px-3 text-xs rounded-xl gap-2 border-primary/20 hover:bg-primary/5 bg-white/50">
+                                                        <CalendarIcon className="h-3.5 w-3.5 text-primary" />
+                                                        <span className="hidden xs:inline">{newApptDate ? format(newApptDate, 'dd/MM/yy', { locale: fr }) : 'Date'}</span>
+                                                    </Button>
+                                                </PopoverTrigger>
+                                                <PopoverContent className="w-auto p-0 border-none shadow-2xl" align="end">
+                                                    <Calendar
+                                                        mode="single"
+                                                        selected={newApptDate || new Date()}
+                                                        onSelect={(d) => d && setNewApptDate(d)}
+                                                        locale={fr}
+                                                        initialFocus
+                                                    />
+                                                </PopoverContent>
+                                            </Popover>
                                             <Button
                                                 variant="outline"
                                                 size="icon"
@@ -1554,12 +1585,6 @@ const Rendezvous = () => {
                                                 {isCalendarFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
                                             </Button>
                                             <Button variant="outline" className="h-9 px-3 text-xs rounded-xl hidden sm:flex" onClick={() => setNewApptDate(new Date())}>Aujourd'hui</Button>
-                                            <Button className="h-9 px-3 sm:px-4 text-[10px] sm:text-xs gap-2 rounded-xl" onClick={() => {
-                                                setSelectedClient(null);
-                                                setIsScheduleOpen(true);
-                                            }}>
-                                                <Plus className="h-4 w-4" /> <span className="hidden xs:inline">Nouveau RDV</span>
-                                            </Button>
                                         </div>
                                     </div>
 

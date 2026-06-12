@@ -31,6 +31,10 @@ const UserManager = lazy(() => import("./pages/UserManager"));
 const LaboPage = lazy(() => import("./pages/LaboPage"));
 const PatientCard = lazy(() => import("./pages/PatientCard"));
 const Ordonnance = lazy(() => import("./pages/Ordonnance"));
+const Inventaire = lazy(() => import("./pages/Inventaire"));
+const LoginInventaire = lazy(() => import("./pages/LoginInventaire"));
+
+
 window.scrollTo(0, 0);
 
 
@@ -93,6 +97,8 @@ const App = () => (
             <Route path="/accueil/login" element={<LoginAccueil />} />
             <Route path="/manager/login" element={<LoginManager />} />
             <Route path="/appointment/login" element={<LoginAppointment />} />
+            <Route path="/inventaire/login" element={<LoginInventaire />} />
+
             <Route path="/client" element={<Client />} />
             <Route path="/review" element={<Satisfaction />} />
             <Route path="/feedback" element={<Feedback />} />
@@ -136,7 +142,11 @@ const App = () => (
               <MedecinDashboard />
             } />
             <Route path="/patient" element={<PatientCard />} />
+            <Route path="/inventaire" element={
+              <ProtectedRoute requiredRoles={['manager', 'receptionist', 'admin']}><Inventaire /></ProtectedRoute>
+            } />
             <Route path="*" element={<NotFound />} />
+
           </Routes>
         </Suspense>
       </AuthProvider>
