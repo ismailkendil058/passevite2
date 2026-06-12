@@ -877,8 +877,8 @@ const MedecinDashboard = () => {
                             </div>
                         ) : (
                             <div className="py-24 text-center bg-white rounded-[3rem] border-2 border-dashed border-slate-100 flex flex-col items-center max-w-xl mx-auto shadow-sm">
-                                <div className="h-20 w-20 bg-orange-50 rounded-full flex items-center justify-center mb-6">
-                                    <UserCheck className="h-10 w-10 text-orange-200" />
+                                <div className="h-20 w-20 bg-primary/10 rounded-full flex items-center justify-center mb-6">
+                                    <UserCheck className="h-10 w-10 text-primary/30" />
                                 </div>
                                 <h3 className="text-xl font-black text-slate-400 uppercase tracking-widest mb-2">Cabinet Vide</h3>
                                 <p className="text-xs text-slate-400 font-medium max-w-[280px] mx-auto">Aucun patient n'est actuellement en consultation.</p>
@@ -908,12 +908,6 @@ const MedecinDashboard = () => {
 
                             {/* TEMPLATES SECTION */}
                             <div className="space-y-6">
-                                <div className="flex items-center justify-between px-2">
-                                    <h3 className="text-sm font-black uppercase tracking-[0.2em] text-slate-400 flex items-center gap-2">
-                                        <ClipboardList className="h-4 w-4" /> Vos Modèles Sauvegardés
-                                    </h3>
-                                    <Badge variant="outline" className="rounded-full border-slate-200 text-slate-400 font-bold">{templates.length} modèles</Badge>
-                                </div>
 
                                 {templates.length > 0 ? (
                                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
