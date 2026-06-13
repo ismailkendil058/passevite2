@@ -28,6 +28,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { useQueue, QueueEntry } from '@/hooks/useQueue';
 import { cn } from '@/lib/utils';
+import { DentalChart } from '@/components/DentalChart';
 import { Checkbox } from '@/components/ui/checkbox';
 
 const TREATMENTS = [
@@ -733,7 +734,7 @@ const MedecinDashboard = () => {
 
             <main className="p-4 lg:p-6 flex-1 space-y-6 w-full">
                 <Tabs defaultValue="cabinet" className="w-full">
-                    <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 bg-muted/50 p-1 rounded-xl h-auto md:h-12 gap-1">
+                    <TabsList className="flex flex-nowrap w-full overflow-x-auto no-scrollbar md:grid md:grid-cols-5 md:overflow-visible justify-start md:justify-center bg-muted/50 p-1 rounded-xl h-auto md:h-12 gap-1 [&>button]:shrink-0">
                         <TabsTrigger value="cabinet" className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm">
                             <UserCheck className="h-4 w-4 mr-2" /> Cabinet
                         </TabsTrigger>
@@ -872,106 +873,11 @@ const MedecinDashboard = () => {
                                             </div>
 
                                             {/* DENTAL CHART SECTION */}
-                                            <div className="space-y-6 py-6 border-y border-slate-100/50 bg-slate-50/30 rounded-[2.5rem] -mx-4 px-4 overflow-x-auto no-scrollbar">
-                                                <p className="text-[11px] font-black uppercase tracking-[0.3em] text-slate-400 text-center mb-4">Schéma Dentaire Anatomique</p>
-                                                <div className="min-w-[600px] flex flex-col gap-8 items-center py-4">
-                                                    {/* UPPER ARCH */}
-                                                    <div className="flex gap-4 sm:gap-6 items-end">
-                                                        <div className="flex gap-1.5 items-end px-4 border-r border-slate-200">
-                                                            {[18, 17, 16, 15, 14, 13, 12, 11].map(num => {
-                                                                const isMolar = [18, 17, 16].includes(num);
-                                                                const isPremolar = [15, 14].includes(num);
-                                                                const isCanine = [13].includes(num);
-                                                                const isIncisor = [12, 11].includes(num);
-                                                                return (
-                                                                    <div key={num} onClick={() => toggleTooth(num)} className={cn("flex flex-col items-center gap-2 cursor-pointer transition-all hover:scale-110", selectedTeeth.includes(num) ? "text-primary" : "text-slate-300")}>
-                                                                        <svg width="28" height="36" viewBox="0 0 28 36" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                                                                            {isMolar && <path d="M5 12c0-4 3-8 9-8s9 4 9 8v12c0 5-3 8-9 8s-9-3-9-8V12zM8 4c0-2 2-3 6-3s6 1 6 3M5 18h18" fill={selectedTeeth.includes(num) ? 'currentColor' : 'none'} fillOpacity="0.15" />}
-                                                                            {isPremolar && <path d="M7 10c0-4 2-7 7-7s7 3 7 7v14c0 4-2 7-7 7s-7-3-7-7V10zM10 3c0-2 1-2 4-2s4 0 4 2" fill={selectedTeeth.includes(num) ? 'currentColor' : 'none'} fillOpacity="0.15" />}
-                                                                            {isCanine && <path d="M14 2c-4 0-7 4-7 10v16c0 4 3 6 7 6s7-2 7-6V12c0-6-3-10-7-10z" fill={selectedTeeth.includes(num) ? 'currentColor' : 'none'} fillOpacity="0.15" />}
-                                                                            {isIncisor && <path d="M8 2h12v24c0 4-3 6-6 6s-6-2-6-6V2z" fill={selectedTeeth.includes(num) ? 'currentColor' : 'none'} fillOpacity="0.15" />}
-                                                                        </svg>
-                                                                        <span className={cn("text-[10px] font-black", selectedTeeth.includes(num) ? "text-primary" : "text-slate-400")}>{num}</span>
-                                                                    </div>
-                                                                );
-                                                            })}
-                                                        </div>
-                                                        <div className="flex gap-1.5 items-end px-4">
-                                                            {[21, 22, 23, 24, 25, 26, 27, 28].map(num => {
-                                                                const isMolar = [26, 27, 28].includes(num);
-                                                                const isPremolar = [24, 25].includes(num);
-                                                                const isCanine = [23].includes(num);
-                                                                const isIncisor = [21, 22].includes(num);
-                                                                return (
-                                                                    <div key={num} onClick={() => toggleTooth(num)} className={cn("flex flex-col items-center gap-2 cursor-pointer transition-all hover:scale-110", selectedTeeth.includes(num) ? "text-primary" : "text-slate-300")}>
-                                                                        <svg width="28" height="36" viewBox="0 0 28 36" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                                                                            {isMolar && <path d="M5 12c0-4 3-8 9-8s9 4 9 8v12c0 5-3 8-9 8s-9-3-9-8V12zM8 4c0-2 2-3 6-3s6 1 6 3M5 18h18" fill={selectedTeeth.includes(num) ? 'currentColor' : 'none'} fillOpacity="0.15" />}
-                                                                            {isPremolar && <path d="M7 10c0-4 2-7 7-7s7 3 7 7v14c0 4-2 7-7 7s-7-3-7-7V10zM10 3c0-2 1-2 4-2s4 0 4 2" fill={selectedTeeth.includes(num) ? 'currentColor' : 'none'} fillOpacity="0.15" />}
-                                                                            {isCanine && <path d="M14 2c-4 0-7 4-7 10v16c0 4 3 6 7 6s7-2 7-6V12c0-6-3-10-7-10z" fill={selectedTeeth.includes(num) ? 'currentColor' : 'none'} fillOpacity="0.15" />}
-                                                                            {isIncisor && <path d="M8 2h12v24c0 4-3 6-6 6s-6-2-6-6V2z" fill={selectedTeeth.includes(num) ? 'currentColor' : 'none'} fillOpacity="0.15" />}
-                                                                        </svg>
-                                                                        <span className={cn("text-[10px] font-black", selectedTeeth.includes(num) ? "text-primary" : "text-slate-400")}>{num}</span>
-                                                                    </div>
-                                                                );
-                                                            })}
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="w-full h-px bg-slate-100 max-w-xl" />
-
-                                                    {/* LOWER ARCH */}
-                                                    <div className="flex gap-4 sm:gap-6 items-start">
-                                                        <div className="flex gap-1.5 items-start px-4 border-r border-slate-200">
-                                                            {[48, 47, 46, 45, 44, 43, 42, 41].map(num => {
-                                                                const isMolar = [48, 47, 46].includes(num);
-                                                                const isPremolar = [45, 44].includes(num);
-                                                                const isCanine = [43].includes(num);
-                                                                const isIncisor = [42, 41].includes(num);
-                                                                return (
-                                                                    <div key={num} onClick={() => toggleTooth(num)} className={cn("flex flex-col items-center gap-2 cursor-pointer transition-all hover:scale-110", selectedTeeth.includes(num) ? "text-primary" : "text-slate-300")}>
-                                                                        <span className={cn("text-[10px] font-black", selectedTeeth.includes(num) ? "text-primary" : "text-slate-400")}>{num}</span>
-                                                                        <svg width="28" height="36" viewBox="0 0 28 36" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                                                                            {isMolar && <path d="M5 24c0 4 3 8 9 8s9-4 9-8V12c0-5-3-8-9-8s-9 3-9 8v12zM8 32c0 2 2 3 6 3s6-1 6-3M5 18h18" fill={selectedTeeth.includes(num) ? 'currentColor' : 'none'} fillOpacity="0.15" />}
-                                                                            {isPremolar && <path d="M7 26c0 4 2 7 7 7s7-3 7-7V12c0-4-2-7-7-7s-7 3-7 7v14zM10 33c0 2 1 2 4 2s4 0 4-2" fill={selectedTeeth.includes(num) ? 'currentColor' : 'none'} fillOpacity="0.15" />}
-                                                                            {isCanine && <path d="M14 34c-4 0-7-4-7-10V8c0-4 3-6 7-6s7 2 7 6v16c0 6-3 10-7 10z" fill={selectedTeeth.includes(num) ? 'currentColor' : 'none'} fillOpacity="0.15" />}
-                                                                            {isIncisor && <path d="M8 34h12V10c0-4-3-6-6-6s-6 2-6 6v24z" fill={selectedTeeth.includes(num) ? 'currentColor' : 'none'} fillOpacity="0.15" />}
-                                                                        </svg>
-                                                                    </div>
-                                                                );
-                                                            })}
-                                                        </div>
-                                                        <div className="flex gap-1.5 items-start px-4">
-                                                            {[31, 32, 33, 34, 35, 36, 37, 38].map(num => {
-                                                                const isMolar = [36, 37, 38].includes(num);
-                                                                const isPremolar = [34, 35].includes(num);
-                                                                const isCanine = [33].includes(num);
-                                                                const isIncisor = [31, 32].includes(num);
-                                                                return (
-                                                                    <div key={num} onClick={() => toggleTooth(num)} className={cn("flex flex-col items-center gap-2 cursor-pointer transition-all hover:scale-110", selectedTeeth.includes(num) ? "text-primary" : "text-slate-300")}>
-                                                                        <span className={cn("text-[10px] font-black", selectedTeeth.includes(num) ? "text-primary" : "text-slate-400")}>{num}</span>
-                                                                        <svg width="28" height="36" viewBox="0 0 28 36" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                                                                            {isMolar && <path d="M5 24c0 4 3 8 9 8s9-4 9-8V12c0-5-3-8-9-8s-9 3-9 8v12zM8 32c0 2 2 3 6 3s6-1 6-3M5 18h18" fill={selectedTeeth.includes(num) ? 'currentColor' : 'none'} fillOpacity="0.15" />}
-                                                                            {isPremolar && <path d="M7 26c0 4 2 7 7 7s7-3 7-7V12c0-4-2-7-7-7s-7 3-7 7v14zM10 33c0 2 1 2 4 2s4 0 4-2" fill={selectedTeeth.includes(num) ? 'currentColor' : 'none'} fillOpacity="0.15" />}
-                                                                            {isCanine && <path d="M14 34c-4 0-7-4-7-10V8c0-4 3-6 7-6s7 2 7 6v16c0 6-3 10-7 10z" fill={selectedTeeth.includes(num) ? 'currentColor' : 'none'} fillOpacity="0.15" />}
-                                                                            {isIncisor && <path d="M8 34h12V10c0-4-3-6-6-6s-6 2-6 6v24z" fill={selectedTeeth.includes(num) ? 'currentColor' : 'none'} fillOpacity="0.15" />}
-                                                                        </svg>
-                                                                    </div>
-                                                                );
-                                                            })}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                {selectedTeeth.length > 0 && (
-                                                    <div className="flex flex-wrap justify-center gap-2 mt-4">
-                                                        <Badge variant="outline" className="rounded-full bg-primary/5 text-primary border-primary/20 font-black animate-in zoom-in-95">
-                                                            {selectedTeeth.length} dent{selectedTeeth.length > 1 ? 's' : ''} sélectionnée{selectedTeeth.length > 1 ? 's' : ''} : {selectedTeeth.sort((a, b) => a - b).join(', ')}
-                                                        </Badge>
-                                                        <Button variant="ghost" size="sm" onClick={() => setSelectedTeeth([])} className="h-6 text-[10px] font-bold text-rose-500 hover:bg-rose-50 rounded-full px-3">
-                                                            Réinitialiser
-                                                        </Button>
-                                                    </div>
-                                                )}
-                                            </div>
+                                            <DentalChart
+                                                selectedTeeth={selectedTeeth}
+                                                onToggle={toggleTooth}
+                                                onClear={() => setSelectedTeeth([])}
+                                            />
 
                                             {/* TRAITEMENT (READ-ONLY IF ACTS EXIST) */}
                                             <div className="space-y-3 text-center">
@@ -1277,12 +1183,13 @@ const MedecinDashboard = () => {
                                         <CardDescription className="text-xs uppercase font-bold tracking-widest opacity-60">Dernières consultations terminées</CardDescription>
                                     </CardHeader>
                                     <CardContent className="p-0">
-                                        <ScrollArea className="h-[450px]">
-                                            <Table>
+                                        <div className="h-[450px] overflow-y-auto no-scrollbar">
+                                            <div className="overflow-x-auto no-scrollbar md:overflow-x-visible [&_.relative]:no-scrollbar">
+                                                <Table className="min-w-[640px] md:min-w-full">
                                                 <TableHeader className="bg-muted/30">
                                                     <TableRow>
                                                         <TableHead className="font-black text-[10px] uppercase tracking-wider text-center">Patient</TableHead>
-                                                        <TableHead className="font-black text-[10px] uppercase tracking-wider text-center">Date</TableHead>
+                                                        <TableHead className="font-black text-[10px] uppercase tracking-wider text-center">Heure</TableHead>
                                                         <TableHead className="font-black text-[10px] uppercase tracking-wider text-center">Traitement</TableHead>
                                                         <TableHead className="font-black text-[10px] uppercase tracking-wider text-center">Total</TableHead>
                                                         <TableHead className="font-black text-[10px] uppercase tracking-wider text-center">Payé</TableHead>
@@ -1293,7 +1200,7 @@ const MedecinDashboard = () => {
                                                     {filteredPaymentsByDate.map((p, idx) => (
                                                         <TableRow key={p.id || idx} className="hover:bg-slate-50 transition-colors">
                                                             <TableCell className="text-center font-black text-sm text-foreground uppercase tracking-tight">{p.client_name}</TableCell>
-                                                            <TableCell className="text-center text-xs text-muted-foreground font-bold">{format(new Date(p.completed_at), 'dd/MM HH:mm')}</TableCell>
+                                                            <TableCell className="text-center text-xs text-muted-foreground font-bold">{format(new Date(p.completed_at), 'HH:mm')}</TableCell>
                                                             <TableCell className="text-center text-xs font-bold text-primary italic">{p.treatment}</TableCell>
                                                             <TableCell className="text-center font-bold text-slate-700">{p.total_amount?.toLocaleString()}</TableCell>
                                                             <TableCell className="text-center font-black text-emerald-600 bg-emerald-50/50">{p.tranche_paid?.toLocaleString()}</TableCell>
@@ -1305,7 +1212,8 @@ const MedecinDashboard = () => {
                                                     )}
                                                 </TableBody>
                                             </Table>
-                                        </ScrollArea>
+                                            </div>
+                                        </div>
                                     </CardContent>
                                 </Card>
                             </div>

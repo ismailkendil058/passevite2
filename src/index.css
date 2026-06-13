@@ -160,6 +160,15 @@ All colors MUST be HSL.
     backface-visibility: hidden;
     perspective: 1000px;
   }
+
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 @keyframes fadeIn {
