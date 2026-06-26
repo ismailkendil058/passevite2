@@ -174,7 +174,7 @@ const Rendezvous = () => {
             q = q.or(`client_name.ilike.%${searchQuery.trim()}%,phone.ilike.%${searchQuery.trim()}%`);
         }
 
-        q = q.order('completed_at', { ascending: false }).limit(200);
+        q = q.order('completed_at', { ascending: false });
 
         const { data } = await q;
         if (data) setClients(data as any);
@@ -345,14 +345,14 @@ const Rendezvous = () => {
         }
 
         try {
-            // Update ALL records with this client_id to maintain dossier integrity
+            // Update ALL records with this client's phone to maintain dossier integrity
             const { error } = await supabase
                 .from('completed_clients')
                 .update({
                     client_name: baseInfo.name,
                     phone: baseInfo.phone
                 })
-                .eq('client_id', baseInfo.client_id);
+                .eq('phone', viewingPatient?.phone);
 
             if (error) throw error;
 
@@ -509,6 +509,8 @@ const Rendezvous = () => {
     // Group by patient (phone + name) to build dossier entries with multiple treatments
     const groupedPatients = useMemo(() => {
         const map = new Map<string, { name: string; phone: string; treatments: Array<{ treatment: string; latest: CompletedClient; totalPaid: number }> }>();
+        
+        // 1. Add completed clients
         uniqueClients.forEach(c => {
             const key = `${c.phone}_${c.client_name.toLowerCase().trim()}`;
             const existing = map.get(key);
@@ -522,8 +524,28 @@ const Rendezvous = () => {
                 existing.treatments.push({ treatment: c.treatment || '—', latest: c, totalPaid: (c as any).totalPaid || 0 });
             }
         });
+
+        // 2. Add patients from appointments who don't have completed client visits
+        const q = searchQuery.toLowerCase().trim();
+        appointments.forEach(a => {
+            if (q) {
+                const nameMatch = a.client_name?.toLowerCase().includes(q);
+                const phoneMatch = a.client_phone?.includes(q);
+                if (!nameMatch && !phoneMatch) return;
+            }
+
+            const key = `${a.client_phone}_${a.client_name.toLowerCase().trim()}`;
+            if (!map.has(key)) {
+                map.set(key, {
+                    name: a.client_name,
+                    phone: a.client_phone,
+                    treatments: []
+                });
+            }
+        });
+
         return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
-    }, [uniqueClients]);
+    }, [uniqueClients, appointments, searchQuery]);
 
     const filteredGroupedPatients = useMemo(() => {
         if (paymentFilter === 'all') return groupedPatients;
@@ -540,14 +562,43 @@ const Rendezvous = () => {
 
     const filteredClients = uniqueClients; // keep for other uses
 
+    // Combine completed clients and appointments to get a list of all unique patients for suggestion autocomplete
+    const uniquePatients = useMemo(() => {
+        const patientsMap = new Map<string, { client_name: string; phone: string }>();
+
+        // 1. Add from completed clients
+        clients.forEach(c => {
+            const key = c.phone.trim();
+            if (!patientsMap.has(key)) {
+                patientsMap.set(key, {
+                    client_name: c.client_name,
+                    phone: c.phone
+                });
+            }
+        });
+
+        // 2. Add from appointments
+        appointments.forEach(a => {
+            const key = a.client_phone.trim();
+            if (!patientsMap.has(key)) {
+                patientsMap.set(key, {
+                    client_name: a.client_name,
+                    phone: a.client_phone
+                });
+            }
+        });
+
+        return Array.from(patientsMap.values()).sort((a, b) => a.client_name.localeCompare(b.client_name));
+    }, [clients, appointments]);
+
     const filteredSuggestions = useMemo(() => {
         if (!apptSearchQuery.trim()) return [];
         const q = apptSearchQuery.toLowerCase();
-        return uniqueClients.filter(c =>
+        return uniquePatients.filter(c =>
             c.client_name.toLowerCase().includes(q) ||
             c.phone.includes(q)
         ).slice(0, 5);
-    }, [apptSearchQuery, uniqueClients]);
+    }, [apptSearchQuery, uniquePatients]);
 
     const parsedAppointments = useMemo(() => {
         return appointments.map(a => ({
@@ -778,16 +829,17 @@ const Rendezvous = () => {
 
     const getPatientTreatments = (phone: string, name: string) => {
         const entries = clients.filter(c => c.phone === phone && c.client_name.toLowerCase().trim() === name.toLowerCase().trim());
-        const map = new Map<string, { entries: CompletedClient[]; totalPaid: number; latestTotal: number }>();
+        const map = new Map<string, { entries: CompletedClient[]; totalPaid: number; latestTotal: number; latestTs: number }>();
         entries.forEach(e => {
             const key = e.treatment || '—';
-            const existing = map.get(key) || { entries: [], totalPaid: 0, latestTotal: 0 };
+            const existing = map.get(key) || { entries: [], totalPaid: 0, latestTotal: 0, latestTs: 0 };
             existing.entries.push(e);
             existing.totalPaid += e.tranche_paid || 0;
             const ts = new Date(e.completed_at).getTime();
             // keep latest total_amount
-            if (!existing.latestTotal || ts > (existing.entries[0] ? new Date(existing.entries[0].completed_at).getTime() : 0)) {
+            if (ts > existing.latestTs) {
                 existing.latestTotal = e.total_amount || 0;
+                existing.latestTs = ts;
             }
             map.set(key, existing);
         });
@@ -1783,7 +1835,7 @@ const Rendezvous = () => {
                                                 <div className="absolute z-50 w-full mt-1 bg-background border rounded-xl shadow-lg overflow-hidden animate-in fade-in slide-in-from-top-1">
                                                     {filteredSuggestions.map(c => (
                                                         <button
-                                                            key={c.id}
+                                                            key={c.phone}
                                                             className="w-full text-left px-4 py-2 hover:bg-muted transition-colors border-b last:border-b-0 space-y-0.5"
                                                             onClick={() => {
                                                                 setSelectedClient({ phone: c.phone, name: c.client_name });

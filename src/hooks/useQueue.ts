@@ -200,15 +200,8 @@ export function useQueue() {
       )
       .subscribe();
 
-    // Polling fallback: refresh every 5 seconds in case realtime misses an event
-    const pollInterval = setInterval(() => {
-      fetchEntries(activeSession.id);
-      fetchInCabinetEntries(activeSession.id);
-    }, 5000);
-
     return () => {
       clearTimeout(timeoutId);
-      clearInterval(pollInterval);
       supabase.removeChannel(channel);
     };
   }, [activeSession?.id, fetchEntries, fetchInCabinetEntries]);
@@ -228,13 +221,7 @@ export function useQueue() {
       )
       .subscribe();
 
-    // Polling fallback for session changes every 5 seconds
-    const pollInterval = setInterval(() => {
-      fetchActiveSession();
-    }, 5000);
-
     return () => {
-      clearInterval(pollInterval);
       supabase.removeChannel(channel);
     };
   }, [fetchActiveSession]);

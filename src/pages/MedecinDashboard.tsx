@@ -291,7 +291,7 @@ const MedecinDashboard = () => {
         }
     }, [doctorInfo, fetchDashboardData]);
 
-    // Realtime subscriptions + polling fallback for live updates
+    // Realtime subscriptions for live updates
     useEffect(() => {
         if (!doctorInfo) return;
 
@@ -302,11 +302,7 @@ const MedecinDashboard = () => {
             .on('postgres_changes', { event: '*', schema: 'public', table: 'prescriptions' }, () => fetchDashboardData())
             .subscribe();
 
-        // Polling fallback: refresh every 5 seconds
-        const pollInterval = setInterval(() => fetchDashboardData(), 5000);
-
         return () => {
-            clearInterval(pollInterval);
             supabase.removeChannel(channel);
         };
     }, [doctorInfo, fetchDashboardData]);
