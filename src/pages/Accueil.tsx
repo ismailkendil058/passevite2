@@ -53,10 +53,12 @@ const QueueItem = React.memo(({ entry, index, onEdit, onDelete, onNext }: { entr
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="font-semibold text-sm sm:text-base text-foreground">{entry.client_id}</span>
+              <span className="font-semibold text-sm sm:text-base text-foreground">
+                {entry.patient_name || entry.phone}
+              </span>
               {entry.patient_name && (
                 <span className="text-sm font-medium text-muted-foreground truncate max-w-[120px] sm:max-w-[200px]">
-                  · {entry.patient_name}
+                  · {entry.phone}
                 </span>
               )}
               <Badge variant="outline" className={`${stateColors[entry.state]} text-xs px-1.5 py-0`}>
@@ -97,7 +99,7 @@ const QueueItem = React.memo(({ entry, index, onEdit, onDelete, onNext }: { entr
                 <AlertDialogHeader>
                   <AlertDialogTitle>Supprimer le patient ?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    Cette action supprimera {entry.client_id} de la file d'attente. Cette action est irréversible.
+                    Cette action supprimera {entry.patient_name || entry.phone} de la file d'attente. Cette action est irréversible.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
@@ -373,7 +375,8 @@ const Accueil = () => {
     // Prevent calling a patient if the doctor already has someone in the cabinet
     const activeDoctorEntry = inCabinetEntries.find(e => e.doctor_id === entry.doctor_id);
     if (activeDoctorEntry) {
-      toast.error(`Le docteur ${entry.doctor?.name || ''} a déjà un patient au cabinet (${activeDoctorEntry.client_id}).`);
+      const activeName = activeDoctorEntry.patient_name || activeDoctorEntry.phone;
+      toast.error(`Le docteur ${entry.doctor?.name || ''} a déjà un patient au cabinet (${activeName}).`);
       return;
     }
 
@@ -382,7 +385,8 @@ const Accueil = () => {
     if (error) {
       toast.error('Erreur lors de l\'appel du patient');
     } else {
-      toast.success(`Patient ${entry.client_id} appelé au cabinet`);
+      const calledName = entry.patient_name || entry.phone;
+      toast.success(`Patient ${calledName} appelé au cabinet`);
     }
   };
 
@@ -958,8 +962,8 @@ const Accueil = () => {
                 onClick={() => handleCompleteClick(entry)}
               >
                 <CardContent className="p-3 text-center">
-                  <p className="font-bold text-lg text-orange-700">{entry.client_id}</p>
-                  <p className="text-xs font-medium text-orange-800 truncate">{entry.patient_name || '—'}</p>
+                  <p className="font-bold text-sm text-orange-700 truncate">{entry.patient_name || entry.phone}</p>
+                  <p className="text-xs font-medium text-orange-800 truncate">{entry.patient_name ? entry.phone : ''}</p>
                   <p className="text-xs text-orange-600 truncate">{entry.doctor?.name || '—'}</p>
                   <p className="text-xs text-orange-500 mt-1">Cliquer pour finaliser</p>
                 </CardContent>
@@ -1131,7 +1135,7 @@ const Accueil = () => {
       <Dialog open={showCompleteModal} onOpenChange={setShowCompleteModal}>
         <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Finaliser · {selectedEntry?.client_id}</DialogTitle>
+            <DialogTitle>Finaliser · {selectedEntry ? (selectedEntry.patient_name || selectedEntry.phone) : ''}</DialogTitle>
           </DialogHeader>
           <div className="max-h-[60vh] overflow-y-auto p-1 -m-1 scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
             <div className="space-y-3 sm:space-y-4 pb-2">
@@ -1317,7 +1321,8 @@ const Accueil = () => {
                 if (error) {
                   toast.error('Erreur lors du retour en file');
                 } else {
-                  toast.success(`${selectedEntry.client_id} retourné en file d\'attente`);
+                  const entryName = selectedEntry.patient_name || selectedEntry.phone;
+                  toast.success(`${entryName} retourné en file d\'attente`);
                   setShowCompleteModal(false);
                 }
               }}
@@ -1336,7 +1341,7 @@ const Accueil = () => {
       <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
         <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Modifier le patient · {editEntry?.client_id}</DialogTitle>
+            <DialogTitle>Modifier le patient · {editEntry ? (editEntry.patient_name || editEntry.phone) : ''}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 sm:space-y-4">
             <Input

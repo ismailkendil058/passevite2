@@ -2,6 +2,13 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 
+const maskPhone = (p: string) => {
+  if (!p) return '';
+  const trimmed = p.trim();
+  if (trimmed.length < 4) return trimmed;
+  return `${trimmed.slice(0, 4)}***${trimmed.slice(-3)}`;
+};
+
 interface Doctor {
   id: string;
   name: string;
@@ -53,7 +60,7 @@ const TV = () => {
     if (!window.speechSynthesis) return;
     window.speechSynthesis.cancel();
 
-    const displayName = patientName || `Monsieur ou Madame ${clientId}`;
+    const displayName = patientName || `Le patient avec le numéro se terminant par ${clientId.slice(-4)}`;
     const text =
       `${displayName}, ` +
       `veuillez vous présenter, s'il vous plaît, ` +
@@ -262,23 +269,14 @@ const TV = () => {
             </div>
 
             <div
-              className="text-[25vw] md:text-[20vw] font-black leading-none tracking-tighter italic animate-slide-up"
+              className="text-[10vw] md:text-[8vw] lg:text-[6vw] font-black leading-none tracking-tighter italic animate-slide-up text-center break-words max-w-[90vw] px-4"
               style={{
                 animationDelay: '0.1s',
                 textShadow: '0 10px 80px rgba(0,0,0,0.3)',
               }}
             >
-              {announcement.clientId}
+              {announcement.patientName || maskPhone(announcement.clientId)}
             </div>
-
-            {announcement.patientName && (
-              <div
-                className="text-5xl md:text-7xl font-black mt-4 md:mt-8 tracking-tight animate-slide-up"
-                style={{ animationDelay: '0.2s' }}
-              >
-                {announcement.patientName}
-              </div>
-            )}
 
             <div
               className="mt-12 md:mt-20 space-y-4 animate-slide-up"
@@ -383,26 +381,19 @@ const TV = () => {
 
                 {/* Next Patient Body */}
                 <CardContent className="flex-1 flex flex-col items-center justify-center p-8 md:p-12">
-                  <div className="text-center space-y-4">
+                  <div className="text-center space-y-4 w-full">
                     <p className="text-xs md:text-sm text-muted-foreground font-bold tracking-[0.4em] uppercase opacity-70">
                       Prochain patient
                     </p>
-                    <div className="relative group">
-                      <div className="absolute inset-0 bg-primary/20 blur-[60px] rounded-full scale-0 group-hover:scale-110 transition-transform duration-700 opacity-50" />
+                    <div className="relative group min-h-[140px] flex items-center justify-center w-full">
+                      <div className="absolute inset-0 bg-primary/10 blur-[50px] rounded-full scale-0 group-hover:scale-110 transition-transform duration-700 opacity-50" />
                       <div className={`
-                        text-[8rem] md:text-[10rem] font-black text-primary leading-none tracking-tighter italic relative z-10
+                        text-3xl md:text-4xl lg:text-5xl font-black text-primary leading-tight tracking-tight relative z-10 text-center break-words max-w-full px-2
                         transition-all duration-700 ${isAnimating ? 'animate-bounce' : ''}
                       `}>
-                        {nextPatient}
+                        {nextPatientName || (nextPatient !== '—' ? maskPhone(nextPatient) : '—')}
                       </div>
                     </div>
-                    {nextPatientName && (
-                      <div className="inline-block px-6 py-2 rounded-full bg-primary/5 border border-primary/10">
-                        <p className="text-lg md:text-2xl font-bold text-foreground tracking-tight">
-                          {nextPatientName}
-                        </p>
-                      </div>
-                    )}
                   </div>
                 </CardContent>
 

@@ -224,13 +224,15 @@ const Client = () => {
               <div className="absolute top-0 left-0 h-2 bg-primary animate-[shimmer_2s_infinite] w-full" style={{ background: 'linear-gradient(90deg, transparent, hsl(var(--primary)), transparent)' }} />
 
               <div className="space-y-3">
+                <h2 className="text-3xl sm:text-4xl font-black text-foreground tracking-tighter italic animate-fade-in">
+                  {queueData.patient_name || queueData.client_id}
+                </h2>
                 {queueData.patient_name && (
-                  <h2 className="text-3xl sm:text-4xl font-black text-foreground tracking-tighter italic animate-fade-in">{queueData.patient_name}</h2>
+                  <div className="space-y-1">
+                    <p className="text-[10px] sm:text-xs font-black text-muted-foreground/60 uppercase tracking-[0.4em]">Téléphone</p>
+                    <p className="text-xl font-bold text-primary tracking-tight">{queueData.client_id}</p>
+                  </div>
                 )}
-                <div className="space-y-1">
-                  <p className="text-[10px] sm:text-xs font-black text-muted-foreground/60 uppercase tracking-[0.4em]">Votre identifiant</p>
-                  <p className="text-7xl sm:text-8xl font-black text-primary tracking-tighter italic animate-pulse-subtle">{queueData.client_id}</p>
-                </div>
               </div>
 
               <div className="inline-flex items-center gap-2 px-6 py-2 rounded-full border border-primary/10 bg-primary/5">

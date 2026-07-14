@@ -113,7 +113,7 @@ const Rendezvous = () => {
     const [isBaseInfoOpen, setIsBaseInfoOpen] = useState(false);
     const [isDeletingPatient, setIsDeletingPatient] = useState(false);
     const [isCalendarFullscreen, setIsCalendarFullscreen] = useState(false);
-    const [baseInfo, setBaseInfo] = useState({ name: '', phone: '', client_id: '' });
+    const [baseInfo, setBaseInfo] = useState({ name: '', phone: '' });
     const [newVisitData, setNewVisitData] = useState<Partial<CompletedClient & { apptDate: Date; apptTime: string; apptDoctor: string; apptNotes: string }>>({
         client_name: '',
         phone: '',
@@ -209,7 +209,7 @@ const Rendezvous = () => {
                     state: visit.state || 'N',
                     receptionist_id: user?.id,
                     session_id: activeSessionId,
-                    client_id: visit.client_id || `ADM-${Date.now()}`
+                    client_id: visit.phone.trim()
                 };
 
                 let { error } = visit.id
@@ -292,7 +292,7 @@ const Rendezvous = () => {
                 state: latestEntry.state,
                 receptionist_id: user?.id,
                 session_id: activeSessionId,
-                client_id: latestEntry.client_id
+                client_id: latestEntry.phone.trim()
             };
 
             const { error } = await supabase.from('completed_clients').insert(paymentData);
@@ -485,7 +485,7 @@ const Rendezvous = () => {
         const patientData = new Map<string, { latest: CompletedClient, totalPaid: number }>();
 
         clients.forEach(c => {
-            const key = `${c.phone}_${c.client_name.toLowerCase().trim()}_${(c.treatment || '').toLowerCase().trim()}`;
+            const key = `${c.phone.trim()}_${(c.treatment || '').toLowerCase().trim()}`;
             const existing = patientData.get(key);
             const currentPaid = c.tranche_paid || 0;
 
@@ -494,7 +494,7 @@ const Rendezvous = () => {
             } else {
                 // Keep the record with the most recent completion date as 'latest'
                 const isNewer = new Date(c.completed_at) > new Date(existing.latest.completed_at);
-                patientData.set(key, { // Fixo: ensure we set using the same key
+                patientData.set(key, { 
                     latest: isNewer ? c : existing.latest,
                     totalPaid: existing.totalPaid + currentPaid
                 });
@@ -506,13 +506,13 @@ const Rendezvous = () => {
             .sort((a, b) => a.client_name.localeCompare(b.client_name));
     }, [clients]);
 
-    // Group by patient (phone + name) to build dossier entries with multiple treatments
+    // Group by patient (phone number strictly) to build dossier entries with multiple treatments
     const groupedPatients = useMemo(() => {
         const map = new Map<string, { name: string; phone: string; treatments: Array<{ treatment: string; latest: CompletedClient; totalPaid: number }> }>();
         
         // 1. Add completed clients
         uniqueClients.forEach(c => {
-            const key = `${c.phone}_${c.client_name.toLowerCase().trim()}`;
+            const key = c.phone.trim();
             const existing = map.get(key);
             if (!existing) {
                 map.set(key, {
@@ -522,6 +522,11 @@ const Rendezvous = () => {
                 });
             } else {
                 existing.treatments.push({ treatment: c.treatment || '—', latest: c, totalPaid: (c as any).totalPaid || 0 });
+                // If this is a more recent completion date, update the name to the latest name
+                const isNewer = new Date(c.completed_at) > new Date(existing.treatments[0]?.latest.completed_at || 0);
+                if (isNewer) {
+                    existing.name = c.client_name;
+                }
             }
         });
 
@@ -534,7 +539,7 @@ const Rendezvous = () => {
                 if (!nameMatch && !phoneMatch) return;
             }
 
-            const key = `${a.client_phone}_${a.client_name.toLowerCase().trim()}`;
+            const key = a.client_phone.trim();
             if (!map.has(key)) {
                 map.set(key, {
                     name: a.client_name,
@@ -817,18 +822,17 @@ const Rendezvous = () => {
         setIsScheduleOpen(true);
     };
 
-    const getClientHistory = (phone: string, name: string, treatment: string) => {
+    const getClientHistory = (phone: string, treatment: string) => {
         const history = clients.filter(c =>
             c.phone === phone &&
-            c.client_name.toLowerCase().trim() === name.toLowerCase().trim() &&
             (c.treatment || '').toLowerCase().trim() === treatment.toLowerCase().trim()
         );
-        const appts = appointments.filter(a => a.client_phone === phone && a.client_name.toLowerCase().trim() === name.toLowerCase().trim());
+        const appts = appointments.filter(a => a.client_phone === phone);
         return { history, appts };
     };
 
-    const getPatientTreatments = (phone: string, name: string) => {
-        const entries = clients.filter(c => c.phone === phone && c.client_name.toLowerCase().trim() === name.toLowerCase().trim());
+    const getPatientTreatments = (phone: string) => {
+        const entries = clients.filter(c => c.phone === phone);
         const map = new Map<string, { entries: CompletedClient[]; totalPaid: number; latestTotal: number; latestTs: number }>();
         entries.forEach(e => {
             const key = e.treatment || '—';
@@ -856,9 +860,9 @@ const Rendezvous = () => {
                 const a = apptsById.get(id as string);
                 if (a) result.push(a);
             });
-            // fallback: also include appointments matching phone/name
+            // fallback: also include appointments matching phone
             if (result.length === 0) {
-                return appointments.filter(a => a.client_phone === phone && a.client_name.toLowerCase().trim() === name.toLowerCase().trim());
+                return appointments.filter(a => a.client_phone === phone);
             }
             return result;
         };
@@ -1135,7 +1139,7 @@ const Rendezvous = () => {
                                                             <Badge variant="outline" className="bg-rose-50 text-rose-600 border-rose-100 text-[9px] h-4 px-1.5 font-bold uppercase">Dette</Badge>
                                                         )}
                                                     </div>
-                                                    <p className="text-xs text-muted-foreground">{patient.phone} · <span className="text-primary/70">{patient.treatments.map(t => t.treatment).slice(0, 2).join(', ')}</span></p>
+                                                    <p className="text-xs text-muted-foreground">{patient.phone} · <span className="text-primary/70">{patient.treatments.map(t => t.treatment).join(', ')}</span></p>
                                                 </div>
                                                 <div className="flex items-center gap-3">
                                                     <div className="text-right hidden sm:block">
@@ -1153,7 +1157,7 @@ const Rendezvous = () => {
                             <Dialog open={!!viewingPatient} onOpenChange={(open) => !open && setViewingPatient(null)}>
                                 <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col p-0 overflow-hidden sm:rounded-2xl">
                                     {viewingPatient && (() => {
-                                        const patientData = getPatientTreatments(viewingPatient.phone, viewingPatient.name);
+                                        const patientData = getPatientTreatments(viewingPatient.phone);
                                         const treatments = patientData.treatments;
                                         const chosen = selectedTreatment || (treatments[0] && treatments[0].treatment) || null;
                                         const entriesForChosen = treatments.find(t => t.treatment === chosen)?.entries || [];
@@ -1189,8 +1193,7 @@ const Rendezvous = () => {
                                                                 <Button variant="outline" size="sm" className="gap-2" onClick={() => {
                                                                     setBaseInfo({
                                                                         name: viewingPatient.name,
-                                                                        phone: viewingPatient.phone,
-                                                                        client_id: entriesForChosen[0]?.client_id || ''
+                                                                        phone: viewingPatient.phone
                                                                     });
                                                                     setIsBaseInfoOpen(true);
                                                                 }}>

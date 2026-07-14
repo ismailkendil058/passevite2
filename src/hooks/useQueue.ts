@@ -301,7 +301,7 @@ export function useQueue() {
         .limit(1),
       supabase
         .from('completed_clients')
-        .select('client_id')
+        .select('id')
         .eq('session_id', activeSession.id)
         .eq('state', state)
     ]);
@@ -313,20 +313,15 @@ export function useQueue() {
       maxNumber = qRes.data[0].state_number;
     }
 
-    // Max from completed_clients (parsing numbers from client_id strings)
+    // Use count of completed clients as a fallback/offset to keep numbers progressive
     if (cRes.data && cRes.data.length > 0) {
-      cRes.data.forEach(item => {
-        const matches = item.client_id.match(/\d+/);
-        if (matches) {
-          const num = parseInt(matches[0]);
-          // Ignore anomalous large numbers (like timestamps) that exceed postgres integer limits
-          if (num > maxNumber && num < 1000000) maxNumber = num;
-        }
-      });
+      if (cRes.data.length > maxNumber) {
+        maxNumber = cRes.data.length;
+      }
     }
 
     const nextNumber = maxNumber + 1;
-    const clientId = `${state}${nextNumber}${doctor.initial}`;
+    const clientId = phone.trim();
     const position = entries.length + 1;
 
     const { data, error } = await supabase
@@ -380,19 +375,15 @@ export function useQueue() {
     const entry = entries.find(e => e.id === entryId) || inCabinetEntries.find(e => e.id === entryId);
     if (!entry || !activeSession) return { error: new Error('Entrée introuvable') };
 
-    // Check if this queue entry was already completed (prevents duplicate on double-click)
-    // We check by client_id + session_id as a dedup key
-    const { data: existing } = await supabase
-      .from('completed_clients')
+    // Check if this queue entry still exists (prevents duplicate completion on double-click)
+    const { data: queueEntry } = await supabase
+      .from('queue_entries')
       .select('id')
-      .eq('client_id', entry.client_id)
-      .eq('session_id', activeSession.id)
-      .eq('phone', entry.phone)
+      .eq('id', entryId)
       .maybeSingle();
 
-    if (existing) {
-      // Already completed — just clean up the queue entry from DB and UI
-      await supabase.from('queue_entries').delete().eq('id', entryId);
+    if (!queueEntry) {
+      // Already completed — just clean up local state
       removeEntryFromState(entryId);
       return { error: null, alreadyCompleted: true };
     }
