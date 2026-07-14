@@ -284,7 +284,7 @@ export function useQueue() {
     return { error };
   };
 
-  const addClient = async (phone: string, state: 'U' | 'N' | 'R', doctorId: string, patientName?: string, appointmentId?: string) => {
+  const addClient = async (phone: string, state: 'U' | 'N' | 'R', doctorId: string, patientName?: string, appointmentId?: string, isExistingPatient?: boolean) => {
     if (!activeSession) return { error: new Error('Aucune séance active') };
 
     const doctor = doctors.find(d => d.id === doctorId);
@@ -321,7 +321,9 @@ export function useQueue() {
     }
 
     const nextNumber = maxNumber + 1;
-    const clientId = phone.trim();
+    // For existing patients: use phone as client_id so their treatments group together in /rendezvous.
+    // For new patients: use a unique UUID so each visit appears as a separate entry in /rendezvous.
+    const clientId = isExistingPatient ? phone.trim() : (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
     const position = entries.length + 1;
 
     const { data, error } = await supabase

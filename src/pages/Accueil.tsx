@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Phone, Plus, LogOut, ChevronRight, ChevronLeft, Users, Clock, CheckCircle, XCircle, MessageCircle, Pencil, Trash2, UserCheck, Calendar as CalendarIcon, DollarSign, ShoppingCart, Sparkles, Lock, Unlock, QrCode, Package } from 'lucide-react';
+import { Phone, Plus, LogOut, ChevronRight, ChevronLeft, Users, Clock, CheckCircle, XCircle, MessageCircle, Pencil, Trash2, UserCheck, Calendar as CalendarIcon, DollarSign, ShoppingCart, Sparkles, Lock, Unlock, QrCode, Package, Search } from 'lucide-react';
 
 import QrScannerModal from '@/components/QrScannerModal';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -229,6 +229,13 @@ const Accueil = () => {
   const [linkedAppointmentId, setLinkedAppointmentId] = useState<string | null>(null);
   const [foundAppointments, setFoundAppointments] = useState<any[]>([]);
 
+  // Existing patient feature (only for Nouveau state)
+  const [isExistingPatient, setIsExistingPatient] = useState(false);
+  const [existingPatientQuery, setExistingPatientQuery] = useState('');
+  const [existingPatientSuggestions, setExistingPatientSuggestions] = useState<Array<{ client_name: string; phone: string }>>([]);
+  const [selectedExistingPatient, setSelectedExistingPatient] = useState<{ client_name: string; phone: string } | null>(null);
+  const [showExistingSuggestions, setShowExistingSuggestions] = useState(false);
+
   // Complete form
   const [clientName, setClientName] = useState('');
   const [treatment, setTreatment] = useState('');
@@ -310,7 +317,7 @@ const Accueil = () => {
       toast.error('Sélectionnez un rendez-vous');
       return;
     }
-    const { error } = await addClient(newPhone, newState, newDoctorId, newPatientName, linkedAppointmentId || undefined);
+    const { error } = await addClient(newPhone, newState, newDoctorId, newPatientName, linkedAppointmentId || undefined, isExistingPatient);
     if (error) {
       if ((error as any).code === '23505') {
         toast.error('Ce numéro de téléphone est déjà dans la file d\'attente');
@@ -326,6 +333,10 @@ const Accueil = () => {
       setNewState('N');
       setNewDoctorId('');
       setLinkedAppointmentId(null);
+      setIsExistingPatient(false);
+      setExistingPatientQuery('');
+      setSelectedExistingPatient(null);
+      setExistingPatientSuggestions([]);
     }
   };
 
@@ -370,6 +381,80 @@ const Accueil = () => {
 
     return () => clearTimeout(timeoutId);
   }, [newPhone, newPatientName, newState, linkedAppointmentId]);
+
+  // Search existing patients from rendezvous (completed_clients + appointments) for the existing-patient checkbox
+  React.useEffect(() => {
+    if (!isExistingPatient || !existingPatientQuery.trim()) {
+      setExistingPatientSuggestions([]);
+      setShowExistingSuggestions(false);
+      return;
+    }
+
+    const q = existingPatientQuery.trim();
+    const isPhoneQuery = /^\d/.test(q); // starts with digit = phone search
+    const hasEnough = isPhoneQuery ? q.length >= 3 : q.length >= 3;
+
+    if (!hasEnough) {
+      setExistingPatientSuggestions([]);
+      setShowExistingSuggestions(false);
+      return;
+    }
+
+    const timeoutId = setTimeout(async () => {
+      try {
+        const patientsMap = new Map<string, { client_name: string; phone: string }>();
+
+        // Search completed_clients
+        const orCond = isPhoneQuery
+          ? `phone.ilike.%${q}%`
+          : `client_name.ilike.%${q}%,phone.ilike.%${q}%`;
+
+        const { data: ccData } = await supabase
+          .from('completed_clients')
+          .select('client_name, phone')
+          .or(orCond)
+          .order('completed_at', { ascending: false })
+          .limit(10);
+
+        if (ccData) {
+          ccData.forEach((c: any) => {
+            const key = c.phone.trim();
+            if (!patientsMap.has(key)) {
+              patientsMap.set(key, { client_name: c.client_name, phone: c.phone });
+            }
+          });
+        }
+
+        // Search appointments
+        const apptOrCond = isPhoneQuery
+          ? `client_phone.ilike.%${q}%`
+          : `client_name.ilike.%${q}%,client_phone.ilike.%${q}%`;
+
+        const { data: apptData } = await supabase
+          .from('appointments')
+          .select('client_name, client_phone')
+          .or(apptOrCond)
+          .limit(10);
+
+        if (apptData) {
+          apptData.forEach((a: any) => {
+            const key = a.client_phone.trim();
+            if (!patientsMap.has(key)) {
+              patientsMap.set(key, { client_name: a.client_name, phone: a.client_phone });
+            }
+          });
+        }
+
+        const results = Array.from(patientsMap.values()).slice(0, 6);
+        setExistingPatientSuggestions(results);
+        setShowExistingSuggestions(results.length > 0);
+      } catch (err) {
+        console.error('Error searching existing patients:', err);
+      }
+    }, 350);
+
+    return () => clearTimeout(timeoutId);
+  }, [isExistingPatient, existingPatientQuery]);
 
   const handleNext = async (entry: QueueEntry) => {
     // Prevent calling a patient if the doctor already has someone in the cabinet
@@ -1016,43 +1101,186 @@ const Accueil = () => {
 
 
       {/* Add Client Modal */}
-      <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
+      <Dialog open={showAddModal} onOpenChange={(open) => {
+        setShowAddModal(open);
+        if (!open) {
+          setIsExistingPatient(false);
+          setExistingPatientQuery('');
+          setSelectedExistingPatient(null);
+          setExistingPatientSuggestions([]);
+          setShowExistingSuggestions(false);
+        }
+      }}>
         <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Ajouter un patient</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 sm:space-y-4">
-            <Select value={newState} onValueChange={(v) => setNewState(v as 'N' | 'R')}>
+            <Select value={newState} onValueChange={(v) => {
+              setNewState(v as 'N' | 'R');
+              if (v !== 'N') {
+                setIsExistingPatient(false);
+                setExistingPatientQuery('');
+                setSelectedExistingPatient(null);
+              }
+            }}>
               <SelectTrigger className="h-11 sm:h-12"><SelectValue placeholder="État" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="N">🟢 Nouveau</SelectItem>
                 <SelectItem value="R">🔵 Rendez-vous</SelectItem>
               </SelectContent>
             </Select>
-            <Input
-              placeholder="Nom du patient"
-              value={newPatientName}
-              onChange={(e) => {
-                setNewPatientName(e.target.value);
-                setLinkedAppointmentId(null); // Clear link if user manually changes name
-              }}
-              className="h-11 sm:h-12"
-            />
+
+            {/* Existing Patient Checkbox – only for Nouveau */}
+            {newState === 'N' && (
+              <div className="flex items-center gap-2.5 py-1">
+                <Checkbox
+                  id="existing-patient-check"
+                  checked={isExistingPatient}
+                  onCheckedChange={(checked) => {
+                    const val = checked === true;
+                    setIsExistingPatient(val);
+                    if (!val) {
+                      setExistingPatientQuery('');
+                      setSelectedExistingPatient(null);
+                      setExistingPatientSuggestions([]);
+                      setShowExistingSuggestions(false);
+                    }
+                  }}
+                />
+                <label
+                  htmlFor="existing-patient-check"
+                  className="text-sm font-semibold text-foreground cursor-pointer leading-none"
+                >
+                  Patient existant
+                </label>
+              </div>
+            )}
+
+            {/* Existing Patient Search – shows when checkbox is ticked */}
+            {newState === 'N' && isExistingPatient && (
+              <div className="space-y-2">
+                <div className="relative">
+                  <Input
+                    placeholder="Rechercher par nom ou numéro de tél"
+                    value={existingPatientQuery}
+                    onChange={(e) => {
+                      setExistingPatientQuery(e.target.value);
+                      if (selectedExistingPatient) {
+                        // Reset if user is editing after a selection
+                        setSelectedExistingPatient(null);
+                        setNewPatientName('');
+                        setNewPhone('');
+                      }
+                    }}
+                    className="h-11 sm:h-12 pl-10"
+                    autoFocus
+                  />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                </div>
+
+                {/* Selected patient badge */}
+                {selectedExistingPatient && (
+                  <div className="flex items-center gap-2 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-xl animate-in fade-in slide-in-from-top-1">
+                    <UserCheck className="h-4 w-4 text-emerald-600 shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-bold text-emerald-800 truncate">{selectedExistingPatient.client_name}</p>
+                      <p className="text-xs text-emerald-600">{selectedExistingPatient.phone}</p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 text-emerald-600 hover:text-destructive hover:bg-rose-50 shrink-0"
+                      onClick={() => {
+                        setSelectedExistingPatient(null);
+                        setExistingPatientQuery('');
+                        setNewPatientName('');
+                        setNewPhone('');
+                      }}
+                    >
+                      <XCircle className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+
+                {/* Suggestions dropdown */}
+                {showExistingSuggestions && !selectedExistingPatient && existingPatientSuggestions.length > 0 && (
+                  <div className="space-y-1.5 p-2.5 bg-violet-50/60 border border-violet-100 rounded-xl animate-in fade-in slide-in-from-top-2">
+                    <p className="text-[10px] font-black uppercase text-violet-600 tracking-widest flex items-center gap-1.5 px-1 mb-1.5">
+                      <Sparkles className="h-3 w-3" /> Patients trouvés :
+                    </p>
+                    <div className="flex flex-col gap-1">
+                      {existingPatientSuggestions.map((p) => (
+                        <button
+                          key={p.phone}
+                          type="button"
+                          className="flex items-center gap-3 w-full text-left px-3 py-2.5 bg-white border border-violet-100 rounded-lg hover:border-violet-300 hover:bg-violet-50 transition-all group"
+                          onClick={() => {
+                            setSelectedExistingPatient(p);
+                            setNewPatientName(p.client_name);
+                            setNewPhone(p.phone);
+                            setExistingPatientQuery(p.client_name);
+                            setShowExistingSuggestions(false);
+                            toast.success(`Patient sélectionné : ${p.client_name}`);
+                          }}
+                        >
+                          <div className="w-8 h-8 rounded-full bg-violet-100 flex items-center justify-center shrink-0 text-violet-600 font-bold text-sm">
+                            {p.client_name.charAt(0).toUpperCase()}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="font-semibold text-sm text-foreground truncate">{p.client_name}</p>
+                            <p className="text-xs text-muted-foreground">{p.phone}</p>
+                          </div>
+                          <ChevronRight className="h-4 w-4 text-violet-300 group-hover:text-violet-500 group-hover:translate-x-0.5 transition-all" />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+              </div>
+            )}
+
+            {/* Normal fields – hidden for existing patient (auto-filled from selection) */}
+            {!(newState === 'N' && isExistingPatient) && (
+              <Input
+                placeholder="Nom du patient"
+                value={newPatientName}
+                onChange={(e) => {
+                  setNewPatientName(e.target.value);
+                  setLinkedAppointmentId(null); // Clear link if user manually changes name
+                }}
+                className="h-11 sm:h-12"
+              />
+            )}
+
             {linkedAppointmentId && (
               <Badge variant="outline" className="bg-blue-50 text-blue-600 border-blue-200 py-1.5 flex items-center gap-1.5">
                 <CalendarIcon className="h-3 w-3" /> Rendez-vous lié
               </Badge>
             )}
-            <Input
-              placeholder="Numéro de téléphone"
-              value={newPhone}
-              onChange={(e) => {
-                setNewPhone(e.target.value);
-                setLinkedAppointmentId(null);
-              }}
-              type="tel"
-              className="h-11 sm:h-12"
-            />
+
+            {/* Phone field – for existing patients it's auto-filled but read-only */}
+            {newState === 'N' && isExistingPatient ? (
+              selectedExistingPatient ? (
+                <Input
+                  value={newPhone}
+                  readOnly
+                  className="h-11 sm:h-12 bg-muted/30 text-muted-foreground"
+                />
+              ) : null
+            ) : (
+              <Input
+                placeholder="Numéro de téléphone"
+                value={newPhone}
+                onChange={(e) => {
+                  setNewPhone(e.target.value);
+                  setLinkedAppointmentId(null);
+                }}
+                type="tel"
+                className="h-11 sm:h-12"
+              />
+            )}
 
             {newState === 'R' && !linkedAppointmentId && (
               <p className="text-[11px] font-medium text-blue-600 bg-blue-50 p-2 rounded-lg border border-blue-100">
@@ -1123,9 +1351,11 @@ const Accueil = () => {
             <Button
               onClick={handleAddClient}
               className="w-full h-11 sm:h-12"
-              disabled={newState === 'R' && !linkedAppointmentId}
+              disabled={newState === 'R' && !linkedAppointmentId || (newState === 'N' && isExistingPatient && !selectedExistingPatient)}
             >
-              Ajouter
+              {newState === 'N' && isExistingPatient && selectedExistingPatient
+                ? `Ajouter traitement à ${selectedExistingPatient.client_name}`
+                : 'Ajouter'}
             </Button>
           </DialogFooter>
         </DialogContent>

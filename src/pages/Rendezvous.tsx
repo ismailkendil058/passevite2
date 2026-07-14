@@ -79,7 +79,7 @@ const Rendezvous = () => {
     const [paymentFilter, setPaymentFilter] = useState<'all' | 'paid' | 'unpaid'>('all');
     const [selectedClient, setSelectedClient] = useState<{ phone: string, name: string } | null>(null);
     const [selectedDoctorMobile, setSelectedDoctorMobile] = useState<string>('all');
-    const [viewingPatient, setViewingPatient] = useState<{ phone: string; name: string } | null>(null);
+    const [viewingPatient, setViewingPatient] = useState<{ id?: string; phone: string; name: string } | null>(null);
     const [selectedTreatment, setSelectedTreatment] = useState<string | null>(null);
     const [isScheduleOpen, setIsScheduleOpen] = useState(false);
     const [viewingClient, setViewingClient] = useState<CompletedClient | null>(null);
@@ -209,7 +209,7 @@ const Rendezvous = () => {
                     state: visit.state || 'N',
                     receptionist_id: user?.id,
                     session_id: activeSessionId,
-                    client_id: visit.phone.trim()
+                    client_id: visit.id ? visit.client_id : (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`)
                 };
 
                 let { error } = visit.id
@@ -292,7 +292,7 @@ const Rendezvous = () => {
                 state: latestEntry.state,
                 receptionist_id: user?.id,
                 session_id: activeSessionId,
-                client_id: latestEntry.phone.trim()
+                client_id: latestEntry.client_id
             };
 
             const { error } = await supabase.from('completed_clients').insert(paymentData);
@@ -352,7 +352,7 @@ const Rendezvous = () => {
                     client_name: baseInfo.name,
                     phone: baseInfo.phone
                 })
-                .eq('phone', viewingPatient?.phone);
+                .eq('client_id', viewingPatient?.id || viewingPatient?.phone);
 
             if (error) throw error;
 
@@ -370,7 +370,7 @@ const Rendezvous = () => {
 
             // Update local viewing state if necessary
             if (viewingPatient) {
-                setViewingPatient({ name: baseInfo.name, phone: baseInfo.phone });
+                setViewingPatient({ id: viewingPatient.id, name: baseInfo.name, phone: baseInfo.phone });
             }
 
             fetchClients();
@@ -391,12 +391,11 @@ const Rendezvous = () => {
 
         setIsDeletingPatient(true);
         try {
-            // Delete from completed_clients by phone + name for maximum reliability
+            // Delete from completed_clients by client_id
             const deleteHistory = supabase
                 .from('completed_clients')
                 .delete()
-                .eq('phone', baseInfo.phone)
-                .ilike('client_name', baseInfo.name);
+                .eq('client_id', viewingPatient?.id || baseInfo.phone);
 
             // Delete from appointments
             const deleteAppts = supabase
@@ -485,7 +484,7 @@ const Rendezvous = () => {
         const patientData = new Map<string, { latest: CompletedClient, totalPaid: number }>();
 
         clients.forEach(c => {
-            const key = `${c.phone.trim()}_${(c.treatment || '').toLowerCase().trim()}`;
+            const key = `${(c.client_id || c.phone).trim()}_${(c.treatment || '').toLowerCase().trim()}`;
             const existing = patientData.get(key);
             const currentPaid = c.tranche_paid || 0;
 
@@ -506,16 +505,17 @@ const Rendezvous = () => {
             .sort((a, b) => a.client_name.localeCompare(b.client_name));
     }, [clients]);
 
-    // Group by patient (phone number strictly) to build dossier entries with multiple treatments
+    // Group by patient (client_id strictly or fallback to phone) to build dossier entries with multiple treatments
     const groupedPatients = useMemo(() => {
-        const map = new Map<string, { name: string; phone: string; treatments: Array<{ treatment: string; latest: CompletedClient; totalPaid: number }> }>();
+        const map = new Map<string, { id: string; name: string; phone: string; treatments: Array<{ treatment: string; latest: CompletedClient; totalPaid: number }> }>();
         
         // 1. Add completed clients
         uniqueClients.forEach(c => {
-            const key = c.phone.trim();
+            const key = (c.client_id || c.phone).trim();
             const existing = map.get(key);
             if (!existing) {
                 map.set(key, {
+                    id: key,
                     name: c.client_name,
                     phone: c.phone,
                     treatments: [{ treatment: c.treatment || '—', latest: c, totalPaid: (c as any).totalPaid || 0 }]
@@ -542,6 +542,7 @@ const Rendezvous = () => {
             const key = a.client_phone.trim();
             if (!map.has(key)) {
                 map.set(key, {
+                    id: key,
                     name: a.client_name,
                     phone: a.client_phone,
                     treatments: []
@@ -831,8 +832,8 @@ const Rendezvous = () => {
         return { history, appts };
     };
 
-    const getPatientTreatments = (phone: string) => {
-        const entries = clients.filter(c => c.phone === phone);
+    const getPatientTreatments = (clientId: string) => {
+        const entries = clients.filter(c => (c.client_id || c.phone) === clientId);
         const map = new Map<string, { entries: CompletedClient[]; totalPaid: number; latestTotal: number; latestTs: number }>();
         entries.forEach(e => {
             const key = e.treatment || '—';
@@ -1130,7 +1131,7 @@ const Rendezvous = () => {
                                     <p className="text-center py-10 text-muted-foreground">Aucun patient trouvé {paymentFilter !== 'all' ? 'avec ce filtre' : ''}</p>
                                 ) : (
                                     filteredGroupedPatients.map(patient => (
-                                        <Card key={`${patient.phone}_${patient.name}`} onClick={() => { setViewingPatient({ phone: patient.phone, name: patient.name }); setSelectedTreatment(null); }} className="cursor-pointer hover:border-primary/30 hover:bg-primary/[0.02] transition-all group">
+                                        <Card key={patient.id} onClick={() => { setViewingPatient({ id: patient.id, phone: patient.phone, name: patient.name }); setSelectedTreatment(null); }} className="cursor-pointer hover:border-primary/30 hover:bg-primary/[0.02] transition-all group">
                                             <CardContent className="p-4 flex items-center justify-between">
                                                 <div className="space-y-1">
                                                     <div className="flex items-center gap-2">
@@ -1157,7 +1158,7 @@ const Rendezvous = () => {
                             <Dialog open={!!viewingPatient} onOpenChange={(open) => !open && setViewingPatient(null)}>
                                 <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col p-0 overflow-hidden sm:rounded-2xl">
                                     {viewingPatient && (() => {
-                                        const patientData = getPatientTreatments(viewingPatient.phone);
+                                        const patientData = getPatientTreatments(viewingPatient.id || viewingPatient.phone);
                                         const treatments = patientData.treatments;
                                         const chosen = selectedTreatment || (treatments[0] && treatments[0].treatment) || null;
                                         const entriesForChosen = treatments.find(t => t.treatment === chosen)?.entries || [];
@@ -2037,7 +2038,7 @@ const Rendezvous = () => {
                 open={showQrScanner}
                 onOpenChange={setShowQrScanner}
                 onScanResult={(phone, name) => {
-                    setViewingPatient({ phone, name });
+                    setViewingPatient({ id: phone, phone, name });
                     setSelectedTreatment(null);
                     setShowQrScanner(false);
                     toast.success(`Dossier patient ouvert : ${name || phone}`);
