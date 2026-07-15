@@ -61,7 +61,7 @@ const COMMON_MEDICATIONS: Record<string, any> = {
 const MedecinDashboard = () => {
     const navigate = useNavigate();
     const { user, signOut } = useAuth();
-    const { inCabinetEntries, completeClient, handoffConsultation, returnToQueue, doctors } = useQueue();
+    const { entries, inCabinetEntries, completeClient, handoffConsultation, returnToQueue, doctors, callClient } = useQueue();
 
     // LOGGED IN DOCTOR INFO
     const [doctorInfo, setDoctorInfo] = useState<{ id: string, name: string } | null>(null);
@@ -135,6 +135,30 @@ const MedecinDashboard = () => {
     const [selectedEntry, setSelectedEntry] = useState<QueueEntry | null>(null);
     const [clientName, setClientName] = useState('');
     const [ecNotes, setEcNotes] = useState('');
+
+    const [showQueueDialog, setShowQueueDialog] = useState(false);
+
+    const doctorEntries = useMemo(() => {
+        if (!doctorInfo) return [];
+        return entries.filter(e => e.doctor_id === doctorInfo.id);
+    }, [entries, doctorInfo]);
+
+    const handleCallPatient = async (entry: QueueEntry) => {
+        const activeDoctorEntry = inCabinetEntries.find(e => e.doctor_id === entry.doctor_id);
+        if (activeDoctorEntry) {
+            const activeName = activeDoctorEntry.patient_name || activeDoctorEntry.phone;
+            toast.error(`Vous avez déjà un patient au cabinet (${activeName}).`);
+            return;
+        }
+
+        const { error } = await callClient(entry.id);
+        if (error) {
+            toast.error("Erreur lors de l'appel du patient");
+        } else {
+            toast.success(`Patient ${entry.patient_name || entry.phone} appelé au cabinet`);
+            setShowQueueDialog(false);
+        }
+    };
 
     // Multi-act state
     const [selectedActs, setSelectedActs] = useState<{ name: string; price: number }[]>([]);
@@ -750,8 +774,14 @@ const MedecinDashboard = () => {
 
                     {/* CABINET CONTENT */}
                     <TabsContent value="cabinet" className="mt-8 animate-in fade-in slide-in-from-bottom-3 duration-500">
-                        <div className="mb-8 px-2">
+                        <div className="mb-8 px-2 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                             <h1 className="text-2xl font-black italic text-slate-800">Gestion des Traitements</h1>
+                            <Button
+                                onClick={() => setShowQueueDialog(true)}
+                                className="rounded-xl h-11 px-6 shadow-lg shadow-primary/20 bg-primary hover:bg-primary/90 font-bold"
+                            >
+                                <Clock className="h-4 w-4 mr-2" /> File d'attente
+                            </Button>
                         </div>
 
                         {inCabinetEntries.filter(e => e.doctor_id === doctorInfo?.id).length > 0 ? (
@@ -1434,6 +1464,86 @@ const MedecinDashboard = () => {
                             Fermer
                         </Button>
                     </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* FILE D'ATTENTE DIALOG */}
+            <Dialog open={showQueueDialog} onOpenChange={setShowQueueDialog}>
+                <DialogContent className="max-w-2xl overflow-hidden rounded-[2.5rem] border-none shadow-2xl p-0 flex flex-col bg-white">
+                    <DialogHeader className="p-8 border-b bg-slate-50/50 flex-shrink-0">
+                        <DialogTitle className="text-2xl font-black italic text-primary flex items-center gap-3">
+                            <Clock className="h-8 w-8 text-primary animate-pulse" /> File d'attente
+                        </DialogTitle>
+                    </DialogHeader>
+
+                    <div className="flex-1 overflow-y-auto p-4 space-y-2 max-h-[60vh] bg-slate-50">
+                        {doctorEntries.length === 0 ? (
+                            <div className="py-12 text-center flex flex-col items-center justify-center bg-white rounded-2xl border border-slate-100">
+                                <div className="h-16 w-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
+                                    <Users className="h-8 w-8 text-slate-300" />
+                                </div>
+                                <h3 className="text-lg font-black text-slate-400 uppercase tracking-widest mb-1">File d'attente Vide</h3>
+                                <p className="text-xs text-slate-400 font-medium max-w-[280px]">Aucun patient ne vous attend pour le moment.</p>
+                            </div>
+                        ) : (
+                            doctorEntries.map((entry, index) => {
+                                const stateColors = {
+                                    U: 'bg-destructive text-destructive-foreground border-none',
+                                    N: 'bg-primary text-primary-foreground border-none',
+                                    R: 'bg-foreground text-background border-none',
+                                };
+                                const stateLabels = { U: 'Urgence', N: 'Nouveau', R: 'Rendez-vous' };
+
+                                return (
+                                    <Card key={entry.id} className="border-0 shadow-sm hover:shadow-md transition-shadow bg-white rounded-2xl">
+                                        <CardContent className="p-3 sm:p-4 flex items-center justify-between gap-2">
+                                            <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                                                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-secondary flex items-center justify-center shrink-0">
+                                                    <span className="text-xs sm:text-sm font-bold text-primary">{index + 1}</span>
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                                        <span className="font-semibold text-sm sm:text-base text-foreground">
+                                                            {entry.patient_name || entry.phone}
+                                                        </span>
+                                                        {entry.patient_name && (
+                                                            <span className="text-xs sm:text-sm font-medium text-muted-foreground truncate max-w-[120px] sm:max-w-[200px]">
+                                                                · {entry.phone}
+                                                            </span>
+                                                        )}
+                                                        <Badge variant="outline" className={`${stateColors[entry.state]} text-[10px] px-1.5 py-0`}>
+                                                            {stateLabels[entry.state]}
+                                                        </Badge>
+                                                    </div>
+                                                    <p className="text-xs text-muted-foreground truncate">
+                                                        docteur {entry.doctor?.name || '—'}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-2 shrink-0">
+                                                <a href={`tel:${entry.phone}`} className="text-primary flex items-center justify-center p-1.5 hover:bg-secondary/50 rounded-full transition-colors" title="Appeler">
+                                                    <Phone className="h-5 w-5" />
+                                                </a>
+                                                <Button
+                                                    size="sm"
+                                                    onClick={() => handleCallPatient(entry)}
+                                                    className="gap-1 shrink-0 h-8 sm:h-9 px-2 sm:px-3 text-xs sm:text-sm"
+                                                >
+                                                    <span className="hidden sm:inline">Suivant</span> <ChevronRight className="h-4 w-4" />
+                                                </Button>
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+                                );
+                            })
+                        )}
+                    </div>
+
+                    <div className="p-8 border-t bg-slate-50/50 flex justify-end flex-shrink-0">
+                        <Button onClick={() => setShowQueueDialog(false)} className="rounded-xl h-12 px-8 font-black uppercase text-xs tracking-widest bg-slate-200 text-slate-700 hover:bg-slate-300">
+                            Fermer
+                        </Button>
+                    </div>
                 </DialogContent>
             </Dialog>
 
