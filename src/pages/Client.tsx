@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Users, Clock, Search, AlertCircle } from 'lucide-react';
+import InstallPrompt from '@/components/InstallPrompt';
 
 interface QueueData {
   client_id: string;
@@ -278,6 +279,9 @@ const Client = () => {
         {new Date().getFullYear()} PasseVite Excellence &bull; Patient Portal
         <span className="h-px w-8 bg-muted-foreground/20" />
       </p>
+
+      {/* PWA install banner — patient view only */}
+      <InstallPrompt />
     </div>
   );
 };

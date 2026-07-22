@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -24,7 +24,7 @@ import { format, parseISO, startOfToday, endOfToday, startOfDay } from 'date-fns
 import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { useQueue, QueueEntry } from '@/hooks/useQueue';
 import { cn } from '@/lib/utils';
@@ -62,6 +62,7 @@ const MedecinDashboard = () => {
     const navigate = useNavigate();
     const { user, signOut } = useAuth();
     const { entries, inCabinetEntries, completeClient, handoffConsultation, returnToQueue, doctors, callClient } = useQueue();
+    const queryClient = useQueryClient();
 
     // LOGGED IN DOCTOR INFO
     const [doctorInfo, setDoctorInfo] = useState<{ id: string, name: string } | null>(null);
@@ -112,6 +113,12 @@ const MedecinDashboard = () => {
         medications: [{ name: '', dosage: '', duree: '', frequency_count: 1, frequency_unit: 'comprimé(s)', timing: 'apres', instructions: '' }],
         notes: ''
     });
+
+    // Patient picker state for "Ajouter au patient"
+    const [showPatientPicker, setShowPatientPicker] = useState(false);
+    const [patientQuery, setPatientQuery] = useState('');
+    const [patientResults, setPatientResults] = useState<any[]>([]);
+    const [patientLoading, setPatientLoading] = useState(false);
 
     // NEW MEDICATION MODAL STATE
     const [showNewMedModal, setShowNewMedModal] = useState(false);
@@ -242,7 +249,7 @@ const MedecinDashboard = () => {
     const loadTemplate = (template: any) => {
         setOrdonnanceForm({
             patient_name: '',
-            date: '',
+            date: format(new Date(), 'yyyy-MM-dd'),
             age: '',
             medications: template.medications,
             notes: template.notes || ''
@@ -392,7 +399,7 @@ const MedecinDashboard = () => {
             const { error } = await supabase.from('prescriptions').insert([{
                 doctor_id: doctorInfo.id,
                 patient_name: ordonnanceForm.patient_name,
-                prescription_date: ordonnanceForm.date,
+                prescription_date: ordonnanceForm.date || format(new Date(), 'yyyy-MM-dd'),
                 medications: ordonnanceForm.medications as any,
                 notes: ordonnanceForm.notes,
                 age: ordonnanceForm.age ? parseInt(ordonnanceForm.age) : null
@@ -410,8 +417,65 @@ const MedecinDashboard = () => {
                 notes: ''
             });
             fetchDashboardData();
+            queryClient.invalidateQueries({ queryKey: ['patient-history'] });
         } catch (err: any) {
             toast.error('Erreur: ' + err.message);
+        } finally {
+            setSavingOrdonnance(false);
+        }
+    };
+
+    // Patient picker helpers
+    const searchPatients = async (q: string) => {
+        if (!doctorInfo) return;
+        const trimmed = q.trim();
+        if (!trimmed) { setPatientResults([]); return; }
+        setPatientLoading(true);
+        try {
+            const orQuery = `phone.eq.${trimmed},client_name.ilike.%${trimmed}%`;
+            const { data } = await supabase
+                .from('completed_clients')
+                .select('*')
+                .or(orQuery)
+                .eq('doctor_id', doctorInfo.id)
+                .limit(20);
+            setPatientResults(data || []);
+        } catch (err) {
+            console.error(err);
+            toast.error('Erreur recherche patients');
+        } finally {
+            setPatientLoading(false);
+        }
+    };
+
+    const addToPatient = async (patient: any) => {
+        if (!doctorInfo) return;
+        setSavingOrdonnance(true);
+        try {
+            const { error } = await supabase.from('prescriptions').insert([{
+                doctor_id: doctorInfo.id,
+                patient_name: patient.client_name,
+                prescription_date: ordonnanceForm.date || format(new Date(), 'yyyy-MM-dd'),
+                medications: ordonnanceForm.medications as any,
+                notes: ordonnanceForm.notes,
+                age: ordonnanceForm.age ? parseInt(ordonnanceForm.age) : null
+            }]);
+            if (error) throw error;
+            toast.success('Ordonnance ajoutée au dossier patient');
+            setShowPatientPicker(false);
+            setShowOrdonnanceModal(false);
+            setOrdonnanceForm({
+                patient_name: '',
+                age: '',
+                date: format(new Date(), 'yyyy-MM-dd'),
+                medications: [{ name: '', dosage: '', duree: '', frequency_count: 1, frequency_unit: 'comprimé(s)', timing: 'apres', instructions: '' }],
+                notes: ''
+            });
+            fetchDashboardData();
+            queryClient.invalidateQueries({ queryKey: ['patient-history'] });
+        } catch (err: any) {
+            console.error(err);
+            toast.error('Erreur: ' + err?.message || 'Impossible d\'ajouter');
         } finally {
             setSavingOrdonnance(false);
         }
@@ -1718,6 +1782,7 @@ const MedecinDashboard = () => {
                         </div>
                         <div className="flex gap-3">
                             <Button variant="ghost" onClick={() => setShowOrdonnanceModal(false)} className="rounded-xl font-bold h-12 px-6">Annuler</Button>
+                            <Button variant="secondary" onClick={() => setShowPatientPicker(true)} className="rounded-xl font-bold h-12 px-6">Ajouter au patient</Button>
                             <Button variant="outline" onClick={() => handlePrintOrdonnance({ ...ordonnanceForm, prescription_date: ordonnanceForm.date })} className="rounded-xl font-black h-12 px-10 border-primary text-primary hover:bg-primary/5 shadow-lg shadow-primary/10 flex-1 sm:flex-none">
                                 <Printer className="h-5 w-5 mr-3" /> Imprimer l'Ordonnance
                             </Button>
@@ -1726,6 +1791,51 @@ const MedecinDashboard = () => {
                 </DialogContent>
             </Dialog>
 
+            {/* PATIENT PICKER MODAL */}
+            <Dialog open={showPatientPicker} onOpenChange={setShowPatientPicker}>
+                <DialogContent className="max-w-3xl rounded-[2rem] p-6">
+                    <DialogHeader>
+                        <DialogTitle className="text-lg font-black">Ajouter l'ordonnance au dossier patient</DialogTitle>
+                        <DialogDescription>Rechercher par téléphone ou nom, puis sélectionner un patient.</DialogDescription>
+                    </DialogHeader>
+
+                    <div className="mt-4 space-y-4">
+                        <div className="flex gap-2 items-center">
+                            <div className="relative flex-1">
+                                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                                <Input
+                                    placeholder="Recherche par téléphone ou nom..."
+                                    value={patientQuery}
+                                    onChange={e => setPatientQuery(e.target.value)}
+                                    onKeyDown={e => e.key === 'Enter' && searchPatients(patientQuery)}
+                                    className="pl-10 h-12 rounded-xl"
+                                />
+                            </div>
+                            <Button onClick={() => searchPatients(patientQuery)} className="rounded-xl h-12 px-6">Rechercher</Button>
+                        </div>
+
+                        <div className="max-h-64 overflow-y-auto space-y-2">
+                            {patientLoading ? (
+                                <div className="p-4">Chargement...</div>
+                            ) : patientResults.length === 0 ? (
+                                <div className="p-4 text-sm text-slate-500">Aucun résultat</div>
+                            ) : (
+                                patientResults.map(p => (
+                                    <div key={p.id} className="p-3 rounded-xl bg-white border shadow-sm flex items-center justify-between">
+                                        <div>
+                                            <div className="font-bold text-sm">{p.client_name}</div>
+                                            <div className="text-xs text-slate-400">{p.phone} • {p.client_email || ''}</div>
+                                        </div>
+                                        <div>
+                                            <Button onClick={() => addToPatient(p)} className="rounded-xl">Sélectionner</Button>
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
 
             {/* ADD NEW MEDICATION MODAL */}
             <Dialog open={showNewMedModal} onOpenChange={setShowNewMedModal}>

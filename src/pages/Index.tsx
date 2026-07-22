@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Monitor, UserCog, Sparkles, Tv, UserCheck, FlaskConical, Globe, Star, CreditCard, Package } from 'lucide-react';
+import InstallPrompt from '@/components/InstallPrompt';
 
 
 const Index = () => {
@@ -70,6 +71,9 @@ const Index = () => {
       >
         &copy; {new Date().getFullYear()} Le soin qui passe vite &bull; Excellence en Soins
       </p>
+
+      {/* PWA install icon — top-right corner */}
+      <InstallPrompt variant="icon" />
     </div>
   );
 };

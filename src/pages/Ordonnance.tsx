@@ -129,6 +129,8 @@ const OrdonnancePage = () => {
         }
     };
 
+    
+
     const addMedication = () => {
         setFormData({
             ...formData,
@@ -454,6 +456,7 @@ const OrdonnancePage = () => {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
 
         </div>
     );
