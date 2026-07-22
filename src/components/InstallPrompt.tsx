@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { X, Download, Loader2, Share, Smartphone, Apple, Monitor, ChevronRight } from 'lucide-react';
+import { X, Download, Loader2, Share, Smartphone, Apple, Monitor, ChevronRight, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -58,7 +58,9 @@ const SvgBar = () => (
   </svg>
 );
 
-const DEVICE_CONTENT = {
+type StepType = { icon: React.ReactNode; text: string; sub: string; image?: string };
+
+const DEVICE_CONTENT: Record<'android' | 'pc', { title: string; subtitle: string; steps: StepType[] }> = {
   android: {
     title: 'Installer sur Android',
     subtitle: 'Via Chrome ou navigateur',
@@ -72,9 +74,10 @@ const DEVICE_CONTENT = {
     title: 'Installer sur PC / Mac',
     subtitle: 'Via Chrome ou Edge',
     steps: [
-      { icon: <SvgBar />, text: 'Regardez la barre d\'adresse', sub: 'Icône d\'installation à droite' },
-      { icon: <SvgPlus />, text: 'Cliquez « Installer PasseVite »', sub: 'Ou Menu > Installer…' },
-      { icon: <SvgCheck />, text: 'Confirmez l\'installation', sub: 'Une fenêtre app s\'ouvrira' },
+      { icon: <SvgDots />, text: 'Regardez la barre d\'adresse', sub: 'Étape 1', image: '/step1.png' },
+      { icon: <FileText className="h-5 w-5 text-primary" />, text: 'Cast, save, and share', sub: 'Étape 2', image: '/step2.png' },
+      { icon: <Download className="h-5 w-5 text-primary" />, text: 'Install page as app..', sub: 'Étape 3', image: '/step3.png' },
+      { icon: <SvgCheck />, text: 'Confirmez l\'installation', sub: 'Étape 4', image: '/step4.png' },
     ],
   },
 };
@@ -191,6 +194,7 @@ function DevicePickerModal({ deferredRef, pendingRef, onInstalled, onClose }: De
   const [installing, setInstalling] = useState<string | false>(false);
   const [iosOpen, setIosOpen] = useState(false);
   const [manualOpen, setManualOpen] = useState<'android' | 'pc' | null>(null);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
   const triggerInstall = useCallback(async (key: 'android' | 'pc') => {
     if (deferredRef.current) {
@@ -286,9 +290,19 @@ function DevicePickerModal({ deferredRef, pendingRef, onInstalled, onClose }: De
                         <div className="shrink-0 h-10 w-10 rounded-2xl bg-primary/5 border border-primary/10 flex items-center justify-center shadow-sm">
                           {step.icon}
                         </div>
-                        <div className="pt-1">
+                        <div className="pt-1 flex-1">
                           <p className="text-sm font-bold text-foreground leading-tight">{step.text}</p>
-                          <p className="text-[10px] text-muted-foreground uppercase tracking-widest mt-0.5">{step.sub}</p>
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-widest mt-0.5">
+                            {step.sub}
+                            {step.image && (
+                              <button
+                                onClick={() => setSelectedImage(step.image!)}
+                                className="ml-1 text-primary hover:underline font-black inline-flex items-center"
+                              >
+                                (Voir l'image)
+                              </button>
+                            )}
+                          </p>
                         </div>
                       </li>
                     ))}
@@ -358,7 +372,7 @@ function DevicePickerModal({ deferredRef, pendingRef, onInstalled, onClose }: De
                         {key === 'ios' && (
                           <ChevronRight className="h-4 w-4 text-muted-foreground/30 group-hover:text-primary transition-colors shrink-0" />
                         )}
-                        {key !== 'ios' && (
+                        {key !== 'ios' && !installing && (
                           <Download className="h-4 w-4 text-muted-foreground/30 group-hover:text-white transition-colors shrink-0" />
                         )}
                       </button>
@@ -382,6 +396,24 @@ function DevicePickerModal({ deferredRef, pendingRef, onInstalled, onClose }: De
 
       {/* iOS instructions — opens on top */}
       {iosOpen && <IOSModal onClose={() => setIosOpen(false)} />}
+
+      {/* Image Lightbox */}
+      {selectedImage && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in"
+          onClick={() => setSelectedImage(null)}
+        >
+          <div className="relative max-w-4xl w-full flex justify-center" onClick={(e) => e.stopPropagation()}>
+            <button
+              className="absolute -top-12 right-0 md:-right-12 text-white/70 hover:text-white bg-black/50 p-2 rounded-full transition-all"
+              onClick={() => setSelectedImage(null)}
+            >
+              <X className="h-6 w-6" />
+            </button>
+            <img src={selectedImage} alt="Étape" className="max-h-[85vh] object-contain rounded-2xl shadow-2xl border border-white/10" />
+          </div>
+        </div>
+      )}
     </>
   );
 }
