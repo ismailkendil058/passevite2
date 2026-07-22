@@ -35,6 +35,50 @@ function saveDismissal() {
   localStorage.setItem(DISMISS_KEY, String(Date.now()));
 }
 
+// ─── SVGs for Steps ───────────────────────────────────────────────────────────
+
+const SvgDots = () => (
+  <svg className="h-5 w-5 text-primary" fill="currentColor" viewBox="0 0 24 24" aria-hidden>
+    <circle cx="12" cy="5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="19" r="1.5" />
+  </svg>
+);
+const SvgPlus = () => (
+  <svg className="h-5 w-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} aria-hidden>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+  </svg>
+);
+const SvgCheck = () => (
+  <svg className="h-5 w-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} aria-hidden>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+  </svg>
+);
+const SvgBar = () => (
+  <svg className="h-5 w-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} aria-hidden>
+    <rect x="3" y="4" width="18" height="3" rx="1.5" />
+  </svg>
+);
+
+const DEVICE_CONTENT = {
+  android: {
+    title: 'Installer sur Android',
+    subtitle: 'Via Chrome ou navigateur',
+    steps: [
+      { icon: <SvgDots />, text: 'Appuyez sur ⋮ (menu)', sub: 'En haut à droite' },
+      { icon: <SvgPlus />, text: 'Sélectionnez « Ajouter à l\'écran d\'accueil »', sub: 'Ou « Installer l\'application »' },
+      { icon: <SvgCheck />, text: 'Confirmez l\'installation', sub: 'Appuyez sur Ajouter / Installer' },
+    ],
+  },
+  pc: {
+    title: 'Installer sur PC / Mac',
+    subtitle: 'Via Chrome ou Edge',
+    steps: [
+      { icon: <SvgBar />, text: 'Regardez la barre d\'adresse', sub: 'Icône d\'installation à droite' },
+      { icon: <SvgPlus />, text: 'Cliquez « Installer PasseVite »', sub: 'Ou Menu > Installer…' },
+      { icon: <SvgCheck />, text: 'Confirmez l\'installation', sub: 'Une fenêtre app s\'ouvrira' },
+    ],
+  },
+};
+
 // ─── iOS instructions modal ───────────────────────────────────────────────────
 
 function IOSModal({ onClose }: { onClose: () => void }) {
@@ -144,13 +188,14 @@ interface DevicePickerProps {
 }
 
 function DevicePickerModal({ deferredRef, pendingRef, onInstalled, onClose }: DevicePickerProps) {
-  const [installing, setInstalling] = useState(false);
+  const [installing, setInstalling] = useState<string | false>(false);
   const [iosOpen, setIosOpen] = useState(false);
+  const [manualOpen, setManualOpen] = useState<'android' | 'pc' | null>(null);
 
-  const triggerInstall = useCallback(async () => {
+  const triggerInstall = useCallback(async (key: 'android' | 'pc') => {
     if (deferredRef.current) {
       // Prompt is ready → fire immediately
-      setInstalling(true);
+      setInstalling(key);
       try {
         await deferredRef.current.prompt();
         const { outcome } = await deferredRef.current.userChoice;
@@ -159,16 +204,11 @@ function DevicePickerModal({ deferredRef, pendingRef, onInstalled, onClose }: De
       } catch { /* ignored */ }
       setInstalling(false);
     } else {
-      // Prompt not fired yet → queue it; show spinner
+      // Prompt not fired yet → Show manual instructions immediately
+      setManualOpen(key);
+      
+      // Also flag pending so if it fires late, it auto-installs behind the scenes
       pendingRef.current = true;
-      setInstalling(true);
-      // Safety: stop spinner after 10 s if event never comes
-      setTimeout(() => {
-        if (pendingRef.current) {
-          pendingRef.current = false;
-          setInstalling(false);
-        }
-      }, 10000);
     }
   }, [deferredRef, pendingRef, onInstalled]);
 
@@ -187,8 +227,8 @@ function DevicePickerModal({ deferredRef, pendingRef, onInstalled, onClose }: De
     if (key === 'ios') {
       setIosOpen(true);
     } else {
-      // Android or PC → native install
-      triggerInstall();
+      // Android or PC → native install or manual instructions
+      triggerInstall(key);
     }
   };
 
@@ -212,74 +252,129 @@ function DevicePickerModal({ deferredRef, pendingRef, onInstalled, onClose }: De
             />
 
             <div className="p-7 space-y-6">
-              {/* Header */}
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="inline-block mb-3 p-2 rounded-xl bg-white shadow-md shadow-primary/10 border border-primary/5">
-                    <img src="/VitalWeb.png" alt="PasseVite" className="h-8 w-8 object-contain" />
-                  </div>
-                  <h2 className="text-lg font-black text-foreground tracking-tight italic">
-                    Installer PasseVite
-                  </h2>
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest mt-0.5">
-                    Choisissez votre appareil
-                  </p>
-                </div>
-                <button
-                  onClick={onClose}
-                  aria-label="Fermer"
-                  className="shrink-0 mt-1 h-8 w-8 flex items-center justify-center rounded-full text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted/30 transition-all active:scale-90"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-
-              {/* Cards */}
-              <div className="space-y-3">
-                {devices.map(({ key, label, sub, Icon }) => (
-                  <button
-                    key={key}
-                    id={`install-pick-${key}`}
-                    onClick={() => handlePick(key)}
-                    disabled={installing}
-                    className="
-                      w-full flex items-center gap-4 px-5 py-4
-                      rounded-2xl border border-primary/10 bg-primary/[0.03]
-                      hover:bg-primary/5 hover:border-primary/25 hover:shadow-md hover:shadow-primary/5
-                      disabled:opacity-50 disabled:cursor-wait
-                      active:scale-[0.98] transition-all duration-200 text-left group
-                    "
-                  >
-                    <div className="shrink-0 h-11 w-11 rounded-xl bg-white border border-primary/10 shadow-sm flex items-center justify-center group-hover:bg-primary group-hover:border-primary transition-all duration-300">
-                      {installing && key !== 'ios'
-                        ? <Loader2 className="h-5 w-5 text-primary group-hover:text-white animate-spin" />
-                        : <Icon className="h-5 w-5 text-primary group-hover:text-white transition-colors" />
-                      }
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-black text-foreground tracking-tight">{label}</p>
-                      <p className="text-[10px] text-muted-foreground uppercase tracking-widest">
-                        {installing && key !== 'ios' ? 'Installation en cours…' : sub}
+              {manualOpen ? (
+                <>
+                  {/* Manual Steps Header */}
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <button
+                        onClick={() => setManualOpen(null)}
+                        className="flex items-center gap-1 text-[10px] text-primary uppercase tracking-widest font-black mb-2 hover:opacity-70 transition-opacity"
+                      >
+                        ← Retour
+                      </button>
+                      <h2 className="text-lg font-black text-foreground tracking-tight italic">
+                        {DEVICE_CONTENT[manualOpen].title}
+                      </h2>
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-widest mt-0.5">
+                        {DEVICE_CONTENT[manualOpen].subtitle}
                       </p>
                     </div>
-                    {key === 'ios' && (
-                      <ChevronRight className="h-4 w-4 text-muted-foreground/30 group-hover:text-primary transition-colors shrink-0" />
-                    )}
-                    {key !== 'ios' && !installing && (
-                      <Download className="h-4 w-4 text-muted-foreground/30 group-hover:text-white transition-colors shrink-0" />
-                    )}
-                  </button>
-                ))}
-              </div>
+                    <button
+                      onClick={onClose}
+                      aria-label="Fermer"
+                      className="shrink-0 mt-1 h-8 w-8 flex items-center justify-center rounded-full text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted/30 transition-all active:scale-90"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                  
+                  {/* Steps */}
+                  <ol className="space-y-4">
+                    {DEVICE_CONTENT[manualOpen].steps.map((step, i) => (
+                      <li key={i} className="flex items-start gap-4">
+                        <div className="shrink-0 h-10 w-10 rounded-2xl bg-primary/5 border border-primary/10 flex items-center justify-center shadow-sm">
+                          {step.icon}
+                        </div>
+                        <div className="pt-1">
+                          <p className="text-sm font-bold text-foreground leading-tight">{step.text}</p>
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-widest mt-0.5">{step.sub}</p>
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
 
-              <Button
-                id="install-modal-close"
-                onClick={onClose}
-                variant="outline"
-                className="w-full h-11 rounded-2xl border-2 border-primary/10 text-xs font-black uppercase tracking-widest hover:bg-primary/5 hover:border-primary/20 active:scale-95 transition-all"
-              >
-                Fermer
-              </Button>
+                  <Button
+                    id="install-modal-close"
+                    onClick={onClose}
+                    variant="outline"
+                    className="w-full h-11 rounded-2xl border-2 border-primary/10 text-xs font-black uppercase tracking-widest hover:bg-primary/5 hover:border-primary/20 active:scale-95 transition-all"
+                  >
+                    Fermer
+                  </Button>
+                </>
+              ) : (
+                <>
+                  {/* Header */}
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="inline-block mb-3 p-2 rounded-xl bg-white shadow-md shadow-primary/10 border border-primary/5">
+                        <img src="/VitalWeb.png" alt="PasseVite" className="h-8 w-8 object-contain" />
+                      </div>
+                      <h2 className="text-lg font-black text-foreground tracking-tight italic">
+                        Installer PasseVite
+                      </h2>
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-widest mt-0.5">
+                        Choisissez votre appareil
+                      </p>
+                    </div>
+                    <button
+                      onClick={onClose}
+                      aria-label="Fermer"
+                      className="shrink-0 mt-1 h-8 w-8 flex items-center justify-center rounded-full text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted/30 transition-all active:scale-90"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  {/* Cards */}
+                  <div className="space-y-3">
+                    {devices.map(({ key, label, sub, Icon }) => (
+                      <button
+                        key={key}
+                        id={`install-pick-${key}`}
+                        onClick={() => handlePick(key)}
+                        disabled={installing !== false}
+                        className="
+                          w-full flex items-center gap-4 px-5 py-4
+                          rounded-2xl border border-primary/10 bg-primary/[0.03]
+                          hover:bg-primary/5 hover:border-primary/25 hover:shadow-md hover:shadow-primary/5
+                          disabled:opacity-50 disabled:cursor-wait
+                          active:scale-[0.98] transition-all duration-200 text-left group
+                        "
+                      >
+                        <div className="shrink-0 h-11 w-11 rounded-xl bg-white border border-primary/10 shadow-sm flex items-center justify-center group-hover:bg-primary group-hover:border-primary transition-all duration-300">
+                          {installing === key
+                            ? <Loader2 className="h-5 w-5 text-primary group-hover:text-white animate-spin" />
+                            : <Icon className="h-5 w-5 text-primary group-hover:text-white transition-colors" />
+                          }
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-sm font-black text-foreground tracking-tight">{label}</p>
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-widest">
+                            {installing === key ? 'Installation en cours…' : sub}
+                          </p>
+                        </div>
+                        {key === 'ios' && (
+                          <ChevronRight className="h-4 w-4 text-muted-foreground/30 group-hover:text-primary transition-colors shrink-0" />
+                        )}
+                        {key !== 'ios' && (
+                          <Download className="h-4 w-4 text-muted-foreground/30 group-hover:text-white transition-colors shrink-0" />
+                        )}
+                      </button>
+                    ))}
+                  </div>
+
+                  <Button
+                    id="install-modal-close"
+                    onClick={onClose}
+                    variant="outline"
+                    className="w-full h-11 rounded-2xl border-2 border-primary/10 text-xs font-black uppercase tracking-widest hover:bg-primary/5 hover:border-primary/20 active:scale-95 transition-all"
+                  >
+                    Fermer
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -317,7 +412,7 @@ export default function InstallPrompt({ variant = 'banner' }: InstallPromptProps
       e.preventDefault();
       deferredRef.current = e as BeforeInstallPromptEvent;
 
-      // Auto-trigger if user already clicked and is waiting
+      // Auto-trigger if user already clicked and is waiting (e.g. while reading manual steps)
       if (pendingRef.current) {
         pendingRef.current = false;
         deferredRef.current.prompt().then(async () => {
