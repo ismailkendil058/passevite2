@@ -101,6 +101,7 @@ const MedecinDashboard = () => {
     const [selectedPatient, setSelectedPatient] = useState<any>(null);
     const [isPatientDialogOpen, setIsPatientDialogOpen] = useState(false);
     const [viewingNote, setViewingNote] = useState<string | null>(null);
+    const [viewingOrdonnance, setViewingOrdonnance] = useState<any | null>(null);
 
     // ORDONNANCE MODAL STATE
     const [showOrdonnanceModal, setShowOrdonnanceModal] = useState(false);
@@ -1442,23 +1443,44 @@ const MedecinDashboard = () => {
                                         ) : patientHistory?.ordonnances.length === 0 ? (
                                             <div className="p-8 text-center text-slate-300 border border-dashed rounded-2xl text-xs font-black uppercase">Aucune ordonnance émise</div>
                                         ) : (
-                                            patientHistory?.ordonnances.map((o: any, idx: number) => (
-                                                <div key={idx} className="bg-white p-4 rounded-xl border shadow-sm flex items-center justify-between group cursor-pointer hover:border-primary transition-colors">
-                                                    <div className="flex items-center gap-4">
-                                                        <FileText className="h-5 w-5 text-slate-300" />
-                                                        <div>
-                                                            <p className="text-sm font-bold text-slate-700">Ordonnance du {format(new Date(o.prescription_date), 'dd MMMM yyyy', { locale: fr })}</p>
-                                                            <div className="flex gap-1 mt-1">
-                                                                {o.medications.slice(0, 2).map((m: any, i: number) => (
-                                                                    <Badge key={i} className="bg-slate-50 text-slate-400 border-none text-[8px] font-black">{m.name}</Badge>
-                                                                ))}
-                                                                {o.medications.length > 2 && <span className="text-[8px] font-bold text-slate-300">+{o.medications.length - 2}</span>}
+                                            patientHistory?.ordonnances.map((o: any, idx: number) => {
+                                                const meds = Array.isArray(o.medications) 
+                                                    ? o.medications 
+                                                    : (typeof o.medications === 'string' ? JSON.parse(o.medications) : []);
+                                                const ordData = { ...o, medications: meds };
+                                                return (
+                                                    <div 
+                                                        key={idx} 
+                                                        className="bg-white p-4 rounded-xl border shadow-sm flex items-center justify-between group cursor-pointer hover:border-primary transition-colors"
+                                                        onClick={() => setViewingOrdonnance(ordData)}
+                                                    >
+                                                        <div className="flex items-center gap-4">
+                                                            <FileText className="h-5 w-5 text-slate-300 group-hover:text-primary transition-colors" />
+                                                            <div>
+                                                                <p className="text-sm font-bold text-slate-700">Ordonnance du {format(new Date(o.prescription_date), 'dd MMMM yyyy', { locale: fr })}</p>
+                                                                <div className="flex gap-1 mt-1 flex-wrap">
+                                                                    {meds.slice(0, 2).map((m: any, i: number) => (
+                                                                        <Badge key={i} className="bg-slate-50 text-slate-400 border-none text-[8px] font-black">{m.name}</Badge>
+                                                                    ))}
+                                                                    {meds.length > 2 && <span className="text-[8px] font-bold text-slate-300">+{meds.length - 2}</span>}
+                                                                </div>
                                                             </div>
                                                         </div>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-8 w-8 text-slate-300 hover:text-primary hover:bg-primary/5 rounded-full"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handlePrintOrdonnance(ordData);
+                                                            }}
+                                                            title="Imprimer l'ordonnance"
+                                                        >
+                                                            <Printer className="h-4 w-4" />
+                                                        </Button>
                                                     </div>
-                                                    <Printer className="h-4 w-4 text-slate-200 group-hover:text-primary transition-colors" />
-                                                </div>
-                                            ))
+                                                );
+                                            })
                                         )}
                                     </TabsContent>
 
@@ -1528,6 +1550,104 @@ const MedecinDashboard = () => {
                             Fermer
                         </Button>
                     </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* ORDONNANCE DETAILS DIALOG */}
+            <Dialog open={!!viewingOrdonnance} onOpenChange={(open) => !open && setViewingOrdonnance(null)}>
+                <DialogContent className="max-w-lg w-[95vw] rounded-3xl p-0 shadow-2xl border-none overflow-hidden bg-white z-[130]">
+                    {viewingOrdonnance && (
+                        <div>
+                            {/* Header */}
+                            <div className="p-6 bg-gradient-to-r from-primary/10 to-primary/5 border-b flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="h-10 w-10 bg-primary text-white rounded-2xl flex items-center justify-center shadow-md">
+                                        <FileText className="h-5 w-5" />
+                                    </div>
+                                    <div>
+                                        <DialogTitle className="text-lg font-black italic text-slate-800">
+                                            Détails de l'Ordonnance
+                                        </DialogTitle>
+                                        <p className="text-xs text-slate-400 font-semibold">
+                                            {viewingOrdonnance.prescription_date ? format(new Date(viewingOrdonnance.prescription_date), 'dd MMMM yyyy', { locale: fr }) : ''}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Content */}
+                            <div className="p-6 space-y-6 max-h-[65vh] overflow-y-auto">
+                                {/* Patient Info */}
+                                <div className="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                                    <div>
+                                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-0.5">Patient</span>
+                                        <span className="text-sm font-bold text-slate-800">{viewingOrdonnance.patient_name || 'N/A'}</span>
+                                    </div>
+                                    <div>
+                                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-0.5">Âge</span>
+                                        <span className="text-sm font-bold text-slate-800">{viewingOrdonnance.age ? `${viewingOrdonnance.age} ans` : '--'}</span>
+                                    </div>
+                                </div>
+
+                                {/* Medications */}
+                                <div className="space-y-3">
+                                    <h4 className="text-xs font-black uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                                        <Pill className="h-4 w-4 text-primary" /> Médicaments Prescrits
+                                    </h4>
+                                    <div className="space-y-3">
+                                        {Array.isArray(viewingOrdonnance.medications) && viewingOrdonnance.medications.length > 0 ? (
+                                            viewingOrdonnance.medications.map((m: any, idx: number) => {
+                                                const timingMap: Record<string, string> = {
+                                                    'avant': 'avant le repas',
+                                                    'apres': 'après le repas',
+                                                    'pendant': 'pendant le repas',
+                                                    'soir': 'le soir',
+                                                    'à jeun': 'à jeun'
+                                                };
+                                                const timingText = timingMap[m.timing] || m.timing || '';
+                                                return (
+                                                    <div key={idx} className="p-4 bg-slate-50/50 border border-slate-100 rounded-2xl space-y-1 hover:border-primary/30 transition-colors">
+                                                        <div className="flex justify-between items-center">
+                                                            <span className="font-bold text-slate-800 text-sm">{m.name}</span>
+                                                            {(m.duree || m.duration) && (
+                                                                <Badge variant="outline" className="text-[10px] font-black border-primary/20 text-primary bg-primary/5">
+                                                                    Qsp: {m.duree || m.duration}
+                                                                </Badge>
+                                                            )}
+                                                        </div>
+                                                        <div className="text-xs text-slate-500 font-medium italic">
+                                                            {m.dosage ? `${m.dosage}` : ''}
+                                                            {m.frequency_count ? ` • ${m.frequency_count}x/jour ${timingText}` : (m.instructions ? ` • ${m.instructions}` : '')}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })
+                                        ) : (
+                                            <p className="text-xs italic text-slate-400">Aucun médicament répertorié.</p>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Notes */}
+                                {viewingOrdonnance.notes && (
+                                    <div className="p-4 bg-amber-50/50 border border-amber-100 rounded-2xl space-y-1">
+                                        <span className="text-[10px] font-black uppercase tracking-wider text-amber-700 block">Note du médecin</span>
+                                        <p className="text-xs text-slate-600 font-medium italic">{viewingOrdonnance.notes}</p>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Footer */}
+                            <div className="p-4 border-t bg-slate-50 flex items-center justify-end">
+                                <Button
+                                    onClick={() => setViewingOrdonnance(null)}
+                                    className="rounded-xl font-bold h-11 px-6 bg-slate-900 text-white hover:bg-slate-800"
+                                >
+                                    Fermer
+                                </Button>
+                            </div>
+                        </div>
+                    )}
                 </DialogContent>
             </Dialog>
 
