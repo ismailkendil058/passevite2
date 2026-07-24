@@ -6,10 +6,11 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
     Phone, Search, CreditCard, CalendarClock, ArrowLeft, Stethoscope,
-    CheckCircle2, Clock, AlertCircle, TrendingUp, Banknote, ChevronRight
+    CheckCircle2, Clock, AlertCircle, TrendingUp, Banknote, ChevronRight, QrCode
 } from 'lucide-react';
 import { format, isPast, isFuture, isToday, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import FullscreenQrModal from '@/components/FullscreenQrModal';
 
 /* ─── Types ─── */
 interface Visit {
@@ -55,6 +56,7 @@ const PatientCard = () => {
     const [treatmentFilter, setTreatmentFilter] = useState<'all' | 'current' | 'completed'>('all');
     const [showHistory, setShowHistory] = useState(false);
     const [showPastAppts, setShowPastAppts] = useState(false);
+    const [isQrStickerOpen, setIsQrStickerOpen] = useState(false);
 
     /* ─── Fetch patient data ─── */
     const fetchPatientData = async () => {
@@ -295,11 +297,21 @@ const PatientCard = () => {
                                             <Phone className="h-3 w-3" /> {phone}
                                         </p>
                                     </div>
-                                    <div className="flex flex-col items-end">
-                                        <div className="p-1.5 bg-white rounded-xl shadow-lg mb-2">
+                                    <div className="flex flex-col items-end gap-2">
+                                        <div className="p-1.5 bg-white rounded-xl shadow-lg">
                                             <img src="/VitalWeb.png" alt="Logo" className="h-6 w-6 object-contain" />
                                         </div>
-                                        <Badge variant="outline" className="border-white/20 text-white bg-white/10 backdrop-blur-sm text-[10px] uppercase font-bold tracking-widest px-3 py-1">E-CARTE</Badge>
+                                        <div className="flex gap-2">
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-8 w-8 bg-white/15 hover:bg-white/25 border-white/20 text-white"
+                                                onClick={() => setIsQrStickerOpen(true)}
+                                            >
+                                                <QrCode className="h-4 w-4" />
+                                            </Button>
+                                            <Badge variant="outline" className="border-white/20 text-white bg-white/10 backdrop-blur-sm text-[10px] uppercase font-bold tracking-widest px-3 py-1">E-CARTE</Badge>
+                                        </div>
                                     </div>
                                 </div>
 
@@ -576,6 +588,13 @@ const PatientCard = () => {
                         </div>
                     </div>
                 )}
+
+                <FullscreenQrModal
+                    open={isQrStickerOpen}
+                    onOpenChange={setIsQrStickerOpen}
+                    patientName={patientName}
+                    patientPhone={phone}
+                />
             </div>
         </div>
     );
