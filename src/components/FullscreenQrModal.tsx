@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -19,7 +19,16 @@ const FullscreenQrModal: React.FC<FullscreenQrModalProps> = ({
     patientPhone,
     clinicName = 'PasseVite',
 }) => {
+    const [isMobile, setIsMobile] = useState(false);
     const qrData = `PV:${patientPhone}:${patientName}`;
+
+    useEffect(() => {
+        const mq = window.matchMedia('(max-width: 640px)');
+        setIsMobile(mq.matches);
+        const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+        mq.addEventListener('change', handler);
+        return () => mq.removeEventListener('change', handler);
+    }, []);
 
     const handleDownload = () => {
         const svg = document.querySelector('.qr-code-svg') as SVGSVGElement;
@@ -52,44 +61,58 @@ const FullscreenQrModal: React.FC<FullscreenQrModalProps> = ({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-4xl w-[95vw] h-[90vh] p-0 overflow-hidden bg-black/95 border-0">
-                <div className="relative w-full h-full flex flex-col items-center justify-center p-8">
+            <DialogContent
+                className={
+                    isMobile
+                        ? 'w-screen h-[100dvh] max-w-none rounded-none border-0 p-0 bg-black/95'
+                        : 'max-w-4xl w-[95vw] h-[85vh] p-0 overflow-hidden bg-black/95 border-0 rounded-2xl'
+                }
+            >
+                <div className="relative w-full h-full flex flex-col items-center justify-center p-4 sm:p-8">
                     {/* Close Button */}
                     <Button
                         variant="ghost"
                         size="icon"
-                        className="absolute top-4 right-4 h-12 w-12 text-white hover:bg-white/10 rounded-full"
+                        className={
+                            isMobile
+                                ? 'absolute top-3 right-3 h-10 w-10 text-white hover:bg-white/10 rounded-full'
+                                : 'absolute top-3 right-3 sm:top-4 sm:right-4 h-10 w-10 sm:h-12 sm:w-12 text-white hover:bg-white/10 rounded-full'
+                        }
                         onClick={() => onOpenChange(false)}
                     >
-                        <X className="h-6 w-6" />
+                        <X className={isMobile ? 'h-5 w-5' : 'h-5 w-5 sm:h-6 sm:w-6'} />
                     </Button>
 
                     {/* QR Code */}
-                    <div className="bg-white p-8 rounded-3xl shadow-2xl">
+                    <div className={isMobile ? 'bg-white p-5 rounded-2xl shadow-2xl' : 'bg-white p-4 sm:p-8 rounded-2xl sm:rounded-3xl shadow-2xl'}>
                         <QRCodeSVG
                             value={qrData}
-                            size={400}
+                            size={isMobile ? 220 : 180}
+                            className="qr-code-svg"
                             level="M"
                             includeMargin={true}
-                            className="qr-code-svg"
                         />
                     </div>
 
                     {/* Patient Info */}
-                    <div className="mt-8 text-center text-white">
-                        <h2 className="text-3xl font-black italic mb-2">{patientName}</h2>
-                        <p className="text-lg text-white/70 flex items-center justify-center gap-2">
+                    <div className={isMobile ? 'mt-4 text-center text-white px-2' : 'mt-4 sm:mt-8 text-center text-white px-2'}>
+                        <h2 className={isMobile ? 'text-xl font-black italic mb-1' : 'text-xl sm:text-3xl font-black italic mb-1 sm:mb-2'}>{patientName}</h2>
+                        <p className={isMobile ? 'text-sm text-white/70' : 'text-sm sm:text-lg text-white/70'}>
                             {patientPhone}
                         </p>
-                        <p className="text-sm text-white/50 mt-1">{clinicName}</p>
+                        <p className={isMobile ? 'text-xs text-white/50 mt-1' : 'text-xs sm:text-sm text-white/50 mt-1'}>{clinicName}</p>
                     </div>
 
                     {/* Download Button */}
                     <Button
                         onClick={handleDownload}
-                        className="mt-8 h-12 px-8 rounded-xl bg-white text-black hover:bg-white/90 font-bold gap-2"
+                        className={
+                            isMobile
+                                ? 'mt-4 h-10 px-4 rounded-xl bg-white text-black hover:bg-white/90 font-bold gap-2 text-sm'
+                                : 'mt-4 sm:mt-8 h-10 sm:h-12 px-4 sm:px-8 rounded-xl bg-white text-black hover:bg-white/90 font-bold gap-2 text-sm'
+                        }
                     >
-                        <Download className="h-5 w-5" />
+                        <Download className={isMobile ? 'h-4 w-4' : 'h-4 w-4 sm:h-5 sm:w-5'} />
                         Télécharger le QR Code
                     </Button>
                 </div>
