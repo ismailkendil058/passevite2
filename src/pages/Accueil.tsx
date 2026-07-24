@@ -228,6 +228,8 @@ const Accueil = () => {
   const [newDoctorId, setNewDoctorId] = useState('');
   const [linkedAppointmentId, setLinkedAppointmentId] = useState<string | null>(null);
   const [foundAppointments, setFoundAppointments] = useState<any[]>([]);
+  const [hasExistingApptsWarning, setHasExistingApptsWarning] = useState(false);
+  const [existingApptsCount, setExistingApptsCount] = useState(0);
 
   // Existing patient feature (only for Nouveau state)
   const [isExistingPatient, setIsExistingPatient] = useState(false);
@@ -381,6 +383,44 @@ const Accueil = () => {
 
     return () => clearTimeout(timeoutId);
   }, [newPhone, newPatientName, newState, linkedAppointmentId]);
+
+  // Check for existing appointments when phone number is entered for a new patient
+  React.useEffect(() => {
+    const checkExisting = async () => {
+      if (newState !== 'N' || !newPhone.trim() || newPhone.trim().length < 3) {
+        setHasExistingApptsWarning(false);
+        setExistingApptsCount(0);
+        return;
+      }
+      // Skip if using existing patient selector
+      if (isExistingPatient && selectedExistingPatient) {
+        setHasExistingApptsWarning(false);
+        setExistingApptsCount(0);
+        return;
+      }
+
+      const today = new Date();
+      const start = new Date(today.setHours(0, 0, 0, 0)).toISOString();
+      const { data } = await supabase
+        .from('appointments')
+        .select('id')
+        .neq('status', 'attended')
+        .neq('status', 'denied')
+        .eq('client_phone', newPhone.trim())
+        .gte('appointment_at', start);
+
+      if (data && data.length > 0) {
+        setHasExistingApptsWarning(true);
+        setExistingApptsCount(data.length);
+      } else {
+        setHasExistingApptsWarning(false);
+        setExistingApptsCount(0);
+      }
+    };
+
+    const t = setTimeout(checkExisting, 400);
+    return () => clearTimeout(t);
+  }, [newPhone, newState, isExistingPatient, selectedExistingPatient]);
 
   // Search existing patients from rendezvous (completed_clients + appointments) for the existing-patient checkbox
   React.useEffect(() => {
@@ -1258,6 +1298,19 @@ const Accueil = () => {
               <Badge variant="outline" className="bg-blue-50 text-blue-600 border-blue-200 py-1.5 flex items-center gap-1.5">
                 <CalendarIcon className="h-3 w-3" /> Rendez-vous lié
               </Badge>
+            )}
+
+            {/* Existing appointments warning */}
+            {hasExistingApptsWarning && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start gap-2.5 animate-in fade-in slide-in-from-top-1">
+                <CalendarIcon className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-amber-800">Patient déjà enregistré</p>
+                  <p className="text-xs text-amber-700 mt-0.5">
+                    Ce patient a {existingApptsCount} rendez-vous {existingApptsCount > 1 ? 'planifiés' : 'planifié'} dans un autre traitement.
+                  </p>
+                </div>
+              </div>
             )}
 
             {/* Phone field – for existing patients it's auto-filled but read-only */}
