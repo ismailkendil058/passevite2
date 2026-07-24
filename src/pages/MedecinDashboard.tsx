@@ -886,7 +886,7 @@ const MedecinDashboard = () => {
                                     </div>
 
                                     <div className="p-10 bg-white">
-                                        <div className="max-w-2xl mx-auto space-y-12">
+                                        <div className="max-w-4xl mx-auto space-y-12">
                                             {/* HISTORIQUE */}
                                             {historyTreatments.length > 0 && (
                                                 <div className="space-y-4 text-center">

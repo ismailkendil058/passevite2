@@ -30,24 +30,19 @@ function getToothType(fdi: number): ToothType {
 
 /** Rotation in degrees to follow natural arch curvature */
 function getArchRotation(fdi: number): number {
-    const quadrant = Math.floor(fdi / 10);
-    const unit = fdi % 10;
-    const pos = unit - 1;
-
-    if (quadrant === 1) return 14 - pos * 3.5;
-    if (quadrant === 2) return -14 + pos * 3.5;
-    if (quadrant === 3) return -14 + pos * 3.5;
-    return 14 - pos * 3.5;
+    // All teeth are displayed vertically (0 degrees) regardless of position
+    return 0;
 }
 
 function getToothWidth(type: ToothType): number {
     switch (type) {
-        case 'wisdom': return 30;
-        case 'molar': return 36;
-        case 'premolar': return 28;
-        case 'canine': return 24;
-        case 'lateral-incisor': return 22;
-        default: return 26;
+        case 'wisdom': return 50; // slightly larger wisdom tooth
+        case 'molar': return 48; // realistic molar width
+        case 'premolar': return 42; // premolar width
+        case 'canine': return 38; // canine width
+        case 'lateral-incisor': return 35; // lateral incisor
+        case 'central-incisor': return 40; // central incisor (default case)
+        default: return 40;
     }
 }
 
@@ -68,8 +63,8 @@ function ToothSvg({ fdi, type, selected, upper, mirrored }: ToothSvgProps) {
     if (ANATOMICAL_INCISOR_TEETH.has(fdi)) {
         return (
             <svg
-                width={type === 'central-incisor' ? 28 : 24}
-                height={58}
+                width={type === 'central-incisor' ? 42 : 36}
+                height={87}
                 viewBox="0 0 948 948"
                 fill="none"
                 className={cn(!upper && 'scale-y-[-1]', mirrored && 'scale-x-[-1]')}
@@ -91,8 +86,8 @@ function ToothSvg({ fdi, type, selected, upper, mirrored }: ToothSvgProps) {
     if (ANATOMICAL_CANINE_TEETH.has(fdi)) {
         return (
             <svg
-                width={26}
-                height={58}
+                width={39}
+                height={87}
                 viewBox="0 0 948 948"
                 fill="none"
                 className={cn(!upper && 'scale-y-[-1]', mirrored && 'scale-x-[-1]')}
@@ -114,8 +109,8 @@ function ToothSvg({ fdi, type, selected, upper, mirrored }: ToothSvgProps) {
     if (ANATOMICAL_PREMOLAR_TEETH.has(fdi)) {
         return (
             <svg
-                width={30}
-                height={58}
+                width={45}
+                height={87}
                 viewBox="0 0 948 948"
                 fill="none"
                 className={cn(!upper && 'scale-y-[-1]', mirrored && 'scale-x-[-1]')}
@@ -137,8 +132,8 @@ function ToothSvg({ fdi, type, selected, upper, mirrored }: ToothSvgProps) {
     if (ANATOMICAL_MOLAR_TEETH.has(fdi)) {
         return (
             <svg
-                width={type === 'wisdom' ? 34 : 38}
-                height={58}
+                width={type === 'wisdom' ? 51 : 57}
+                height={87}
                 viewBox="0 0 948 948"
                 fill="none"
                 className={cn(!upper && 'scale-y-[-1]', mirrored && 'scale-x-[-1]')}
@@ -271,7 +266,7 @@ function ToothSvg({ fdi, type, selected, upper, mirrored }: ToothSvgProps) {
     return (
         <svg
             width={getToothWidth(type)}
-            height={56}
+            height={84}
             viewBox="0 0 40 56"
             fill="none"
             className={cn(!upper && 'scale-y-[-1]', mirrored && 'scale-x-[-1]')}
@@ -330,7 +325,7 @@ interface DentalChartProps {
 
 export function DentalChart({ selectedTeeth, onToggle, onClear }: DentalChartProps) {
     return (
-        <div className="space-y-6 py-6 border-y border-slate-100/50 bg-slate-50/30 rounded-[2.5rem] -mx-4 px-4 overflow-x-auto no-scrollbar">
+        <div className="space-y-6 py-6 border border-slate-200/80 bg-slate-50/40 rounded-[2.5rem] p-4 sm:p-6 overflow-x-auto no-scrollbar shadow-sm">
             <p className="text-[11px] font-black uppercase tracking-[0.3em] text-slate-400 text-center mb-2">
                 Schéma Dentaire Anatomique
             </p>
@@ -338,7 +333,7 @@ export function DentalChart({ selectedTeeth, onToggle, onClear }: DentalChartPro
                 Numérotation FDI — Vue vestibulaire
             </p>
 
-            <div className="min-w-[620px] flex flex-col gap-6 items-center py-2">
+            <div className="min-w-[840px] flex flex-col gap-6 items-center py-2">
                 {/* Upper arch */}
                 <div className="relative w-full flex justify-center">
                     <svg className="absolute inset-x-8 top-1/2 -translate-y-1/2 w-[calc(100%-4rem)] h-16 pointer-events-none" viewBox="0 0 500 60" preserveAspectRatio="none">
