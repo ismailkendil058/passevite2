@@ -972,7 +972,13 @@ const MedecinDashboard = () => {
 
                                             {/* TRAITEMENT (READ-ONLY IF ACTS EXIST) */}
                                             <div className="space-y-3 text-center">
-                                                <label className="text-[11px] font-black uppercase tracking-widest text-slate-400">Détails du Traitement</label>
+                                                <label className="text-[11px] font-black uppercase tracking-widest text-slate-400">
+                                                    {selectedHistoryTreatment && selectedActs.length > 0
+                                                        ? 'Nouveaux actes à ajouter au traitement'
+                                                        : selectedHistoryTreatment
+                                                            ? 'Traitement existant'
+                                                            : 'Détails du Traitement'}
+                                                </label>
                                                 <div className="relative">
                                                     <Input
                                                         placeholder="Saisissez l'acte médical..."
@@ -1012,7 +1018,13 @@ const MedecinDashboard = () => {
 
                                             {/* MONTANT TOTAL */}
                                             <div className="space-y-3 text-center">
-                                                <label className="text-[11px] font-black uppercase tracking-widest text-slate-400">Montant total (DZD)</label>
+                                                <label className="text-[11px] font-black uppercase tracking-widest text-slate-400">
+                                                    {selectedHistoryTreatment && selectedActs.length > 0
+                                                        ? 'Montant des nouveaux actes (DZD)'
+                                                        : selectedHistoryTreatment
+                                                            ? 'Montant du traitement existant (DZD)'
+                                                            : 'Montant total (DZD)'}
+                                                </label>
                                                 <Input
                                                     placeholder="0"
                                                     value={totalAmount}
@@ -1022,19 +1034,6 @@ const MedecinDashboard = () => {
                                                     className="h-16 rounded-3xl border-slate-200 bg-slate-50/50 font-black text-slate-700 text-center text-xl shadow-inner"
                                                 />
                                             </div>
-
-                                            {/* RESTE À PAYER BLOCO */}
-                                            {totalAmount && (
-                                                <div className="flex flex-col items-center justify-center p-8 bg-rose-50 rounded-[2.5rem] border border-rose-100/50 animate-in fade-in slide-in-from-top-4">
-                                                    <div className="flex items-center gap-2 mb-2">
-                                                        <div className="h-2 w-2 rounded-full bg-rose-500 animate-pulse" />
-                                                        <span className="text-[10px] font-black uppercase text-rose-600 tracking-[0.2em]">Reste à payer</span>
-                                                    </div>
-                                                    <span className="text-4xl font-black text-rose-700 tracking-tighter">
-                                                        {(parseFloat(totalAmount) - totalPaidPreviously).toLocaleString()} <span className="text-sm opacity-60">DZD</span>
-                                                    </span>
-                                                </div>
-                                            )}
 
                                             {/* NOTE */}
                                             <div className="space-y-3 text-center">

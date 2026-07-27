@@ -515,10 +515,25 @@ const Accueil = () => {
     }
   };
 
+  const getHandoffContinuation = (baseTreatment: string, baseTotalAmount: number, entry: QueueEntry | null) => {
+    const handoffAct = entry?.state === 'R' ? entry.treatment?.trim() : '';
+    const baseParts = baseTreatment.split(/\s+\+\s+/).map(part => part.trim().toLowerCase());
+
+    if (!handoffAct || baseParts.includes(handoffAct.toLowerCase())) {
+      return { treatment: baseTreatment, totalAmount: baseTotalAmount };
+    }
+
+    return {
+      treatment: `${baseTreatment} + ${handoffAct}`,
+      totalAmount: baseTotalAmount + (Number(entry?.total_amount) || 0)
+    };
+  };
+
   const handleCompleteClick = async (entry: QueueEntry) => {
     // Open completion form for in-cabinet client
     setSelectedEntry(entry);
     setClientName(entry.patient_name || '');
+    let historyBase: { treatment: string; totalAmount: number } | null = null;
 
     // Fetch history for pre-filling
     try {
@@ -555,8 +570,10 @@ const Accueil = () => {
           // Prefill with the most recent treatment if available
           const first = treatmentsArr[0];
           if (first) {
-            setTreatment(first.treatment);
-            setTotalAmount(first.totalAmount?.toString() || '');
+            historyBase = { treatment: first.treatment, totalAmount: first.totalAmount || 0 };
+            const continuation = getHandoffContinuation(historyBase.treatment, historyBase.totalAmount, entry);
+            setTreatment(continuation.treatment);
+            setTotalAmount(continuation.totalAmount.toString());
             setTotalPaidPreviously(first.totalPaid || 0);
             setSelectedHistoryTreatment(first.treatment);
           } else {
@@ -592,9 +609,15 @@ const Accueil = () => {
       });
 
       if (entry.treatment) {
-        setTreatment(entry.treatment);
-        setTotalAmount(entry.total_amount?.toString() || '');
-        setSelectedHistoryTreatment(entry.treatment);
+        if (historyBase) {
+          const continuation = getHandoffContinuation(historyBase.treatment, historyBase.totalAmount, entry);
+          setTreatment(continuation.treatment);
+          setTotalAmount(continuation.totalAmount.toString());
+        } else {
+          setTreatment(entry.treatment);
+          setTotalAmount(entry.total_amount?.toString() || '');
+          setSelectedHistoryTreatment(entry.treatment);
+        }
       }
       if (entry.handoff_notes) {
         setCompleteNotes(entry.handoff_notes);
@@ -637,7 +660,39 @@ const Accueil = () => {
     setIsCompletingClient(true);
 
     try {
-      const { error, alreadyCompleted } = await completeClient(
+      const selectedHistory = selectedHistoryTreatment
+        ? historyTreatments.find(item => item.treatment === selectedHistoryTreatment)
+        : null;
+      const continuation = selectedHistory
+        ? getHandoffContinuation(selectedHistory.treatment, selectedHistory.totalAmount, selectedEntry)
+        : null;
+      const shouldMergeContinuation = Boolean(
+        selectedHistory &&
+        continuation &&
+        continuation.treatment !== selectedHistory.treatment &&
+        treatment.trim() === continuation.treatment
+      );
+      let mergeApplied = false;
+
+      if (shouldMergeContinuation && continuation && selectedHistory) {
+        const { data: updatedRows, error: updateError } = await supabase
+          .from('completed_clients')
+          .update({
+            treatment: continuation.treatment,
+            total_amount: continuation.totalAmount
+          })
+          .eq('phone', selectedEntry.phone)
+          .eq('treatment', selectedHistory.treatment)
+          .select('id');
+
+        if (updateError || !updatedRows?.length) {
+          toast.error('Impossible de mettre à jour le traitement existant');
+          return;
+        }
+        mergeApplied = true;
+      }
+
+      const completionResult = await completeClient(
         selectedEntry.id,
         clientName,
         treatment,
@@ -646,10 +701,22 @@ const Accueil = () => {
         user.id,
         completeNotes
       );
-      if (error) {
+      if (completionResult.error) {
+        if (mergeApplied && selectedHistory && continuation) {
+          await supabase
+            .from('completed_clients')
+            .update({
+              treatment: selectedHistory.treatment,
+              total_amount: selectedHistory.totalAmount
+            })
+            .eq('phone', selectedEntry.phone)
+            .eq('treatment', continuation.treatment);
+        }
         toast.error('Erreur lors de la validation du patient');
         return;
       }
+
+      const { alreadyCompleted } = completionResult;
 
       if (alreadyCompleted) {
         toast.info('Ce patient était déjà traité');
@@ -1446,8 +1513,9 @@ const Accueil = () => {
                             setTotalPaidPreviously(0);
                           } else {
                             setSelectedHistoryTreatment(ht.treatment);
-                            setTreatment(ht.treatment);
-                            setTotalAmount(ht.totalAmount?.toString() || '');
+                            const continuation = getHandoffContinuation(ht.treatment, ht.totalAmount || 0, selectedEntry);
+                            setTreatment(continuation.treatment);
+                            setTotalAmount(continuation.totalAmount.toString());
                             setTotalPaidPreviously(ht.totalPaid || 0);
                           }
                         }}
