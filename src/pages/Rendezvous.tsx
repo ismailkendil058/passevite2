@@ -540,7 +540,8 @@ const Rendezvous = () => {
             }
 
             const key = a.client_phone.trim();
-            if (!map.has(key)) {
+            const existingPatient = Array.from(map.values()).find(patient => patient.phone.trim() === key);
+            if (!existingPatient) {
                 map.set(key, {
                     id: key,
                     name: a.client_name,
@@ -834,6 +835,7 @@ const Rendezvous = () => {
 
     const getPatientTreatments = (clientId: string) => {
         const entries = clients.filter(c => (c.client_id || c.phone) === clientId);
+        const patientPhone = entries.find(e => e.phone)?.phone || clientId;
         const map = new Map<string, { entries: CompletedClient[]; totalPaid: number; latestTotal: number; latestTs: number }>();
         entries.forEach(e => {
             const key = e.treatment || '—';
@@ -863,7 +865,7 @@ const Rendezvous = () => {
             });
             // fallback: also include appointments matching phone
             if (result.length === 0) {
-                return appointments.filter(a => a.client_phone === phone);
+                return appointments.filter(a => a.client_phone === patientPhone);
             }
             return result;
         };
