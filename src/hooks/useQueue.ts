@@ -321,9 +321,21 @@ export function useQueue() {
     }
 
     const nextNumber = maxNumber + 1;
-    // For existing patients: use phone as client_id so their treatments group together in /rendezvous.
-    // For new patients: use a unique UUID so each visit appears as a separate entry in /rendezvous.
-    const clientId = isExistingPatient ? phone.trim() : (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    let clientId = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    if (isExistingPatient || appointmentId) {
+      const { data: existingClient, error: existingClientError } = await supabase
+        .from('completed_clients')
+        .select('client_id')
+        .eq('phone', phone.trim())
+        .not('client_id', 'is', null)
+        .order('completed_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (existingClientError) return { error: existingClientError };
+
+      clientId = existingClient?.client_id || phone.trim();
+    }
     const position = entries.length + 1;
 
     const { data, error } = await supabase

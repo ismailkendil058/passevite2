@@ -508,10 +508,12 @@ const Rendezvous = () => {
     // Group by patient (client_id strictly or fallback to phone) to build dossier entries with multiple treatments
     const groupedPatients = useMemo(() => {
         const map = new Map<string, { id: string; name: string; phone: string; treatments: Array<{ treatment: string; latest: CompletedClient; totalPaid: number }> }>();
+        const patientPhones = new Set<string>();
         
         // 1. Add completed clients
         uniqueClients.forEach(c => {
             const key = (c.client_id || c.phone).trim();
+            patientPhones.add(c.phone.trim());
             const existing = map.get(key);
             if (!existing) {
                 map.set(key, {
@@ -540,14 +542,14 @@ const Rendezvous = () => {
             }
 
             const key = a.client_phone.trim();
-            const existingPatient = Array.from(map.values()).find(patient => patient.phone.trim() === key);
-            if (!existingPatient) {
+            if (!patientPhones.has(key)) {
                 map.set(key, {
                     id: key,
                     name: a.client_name,
                     phone: a.client_phone,
                     treatments: []
                 });
+                patientPhones.add(key);
             }
         });
 
