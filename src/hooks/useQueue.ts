@@ -12,7 +12,7 @@ export interface QueueEntry {
   state_number: number;
   client_id: string;
   position: number;
-  status: 'waiting' | 'in_cabinet' | 'completed';
+  status: 'waiting' | 'in_cabinet' | 'ready_for_reception' | 'completed';
   appointment_id?: string;
   created_at: string;
   doctor?: { name: string; initial: string };
@@ -89,7 +89,7 @@ export function useQueue() {
       .from('queue_entries')
       .select('*, doctor:doctors(*)')
       .eq('session_id', sessionId)
-      .eq('status', 'in_cabinet')
+      .in('status', ['in_cabinet', 'ready_for_reception'])
       .order('created_at', { ascending: true });
     if (data) {
       setInCabinetEntries(data as QueueEntry[]);
@@ -106,7 +106,8 @@ export function useQueue() {
       .update({
         treatment: data.treatment,
         total_amount: data.total_amount,
-        handoff_notes: data.handoff_notes
+        handoff_notes: data.handoff_notes,
+        status: 'ready_for_reception'
       } as any)
       .eq('id', entryId);
 

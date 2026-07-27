@@ -498,7 +498,7 @@ const Accueil = () => {
 
   const handleNext = async (entry: QueueEntry) => {
     // Prevent calling a patient if the doctor already has someone in the cabinet
-    const activeDoctorEntry = inCabinetEntries.find(e => e.doctor_id === entry.doctor_id);
+    const activeDoctorEntry = inCabinetEntries.find(e => e.doctor_id === entry.doctor_id && e.status === 'in_cabinet');
     if (activeDoctorEntry) {
       const activeName = activeDoctorEntry.patient_name || activeDoctorEntry.phone;
       toast.error(`Le docteur ${entry.doctor?.name || ''} a déjà un patient au cabinet (${activeName}).`);
@@ -1147,20 +1147,23 @@ const Accueil = () => {
             Au cabinet ({inCabinetEntries.length})
           </h2>
           <div className="flex justify-center gap-2 overflow-x-auto pb-3 scrollbar-hide w-full">
-            {inCabinetEntries.map(entry => (
-              <Card
-                key={entry.id}
-                className="border-orange-200 bg-orange-50 shrink-0 w-40 sm:w-48 cursor-pointer hover:shadow-md transition-shadow"
-                onClick={() => handleCompleteClick(entry)}
-              >
-                <CardContent className="p-3 text-center">
-                  <p className="font-bold text-sm text-orange-700 truncate">{entry.patient_name || entry.phone}</p>
-                  <p className="text-xs font-medium text-orange-800 truncate">{entry.patient_name ? entry.phone : ''}</p>
-                  <p className="text-xs text-orange-600 truncate">{entry.doctor?.name || '—'}</p>
-                  <p className="text-xs text-orange-500 mt-1">Cliquer pour finaliser</p>
-                </CardContent>
-              </Card>
-            ))}
+            {inCabinetEntries.map(entry => {
+              const isReadyForReception = entry.status === 'ready_for_reception';
+              return (
+                <Card
+                  key={entry.id}
+                  className={`${isReadyForReception ? 'border-emerald-200 bg-emerald-50' : 'border-orange-200 bg-orange-50'} shrink-0 w-40 sm:w-48 cursor-pointer hover:shadow-md transition-shadow`}
+                  onClick={() => handleCompleteClick(entry)}
+                >
+                  <CardContent className="p-3 text-center">
+                    <p className={`font-bold text-sm truncate ${isReadyForReception ? 'text-emerald-700' : 'text-orange-700'}`}>{entry.patient_name || entry.phone}</p>
+                    <p className={`text-xs font-medium truncate ${isReadyForReception ? 'text-emerald-800' : 'text-orange-800'}`}>{entry.patient_name ? entry.phone : ''}</p>
+                    <p className={`text-xs truncate ${isReadyForReception ? 'text-emerald-600' : 'text-orange-600'}`}>{entry.doctor?.name || '—'}</p>
+                    <p className={`text-xs mt-1 ${isReadyForReception ? 'text-emerald-600 font-bold' : 'text-orange-500'}`}>{isReadyForReception ? 'Prêt pour finaliser' : 'En consultation'}</p>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         </div>
       )}

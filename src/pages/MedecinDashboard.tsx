@@ -151,8 +151,13 @@ const MedecinDashboard = () => {
         return entries.filter(e => e.doctor_id === doctorInfo.id);
     }, [entries, doctorInfo]);
 
+    const activeCabinetEntries = useMemo(() => {
+        if (!doctorInfo) return [];
+        return inCabinetEntries.filter(e => e.doctor_id === doctorInfo.id && e.status === 'in_cabinet');
+    }, [inCabinetEntries, doctorInfo]);
+
     const handleCallPatient = async (entry: QueueEntry) => {
-        const activeDoctorEntry = inCabinetEntries.find(e => e.doctor_id === entry.doctor_id);
+        const activeDoctorEntry = inCabinetEntries.find(e => e.doctor_id === entry.doctor_id && e.status === 'in_cabinet');
         if (activeDoctorEntry) {
             const activeName = activeDoctorEntry.patient_name || activeDoctorEntry.phone;
             toast.error(`Vous avez déjà un patient au cabinet (${activeName}).`);
@@ -341,20 +346,17 @@ const MedecinDashboard = () => {
 
     // AUTO-SELECT CABINET PATIENT
     useEffect(() => {
-        if (!doctorInfo) return;
-        const myCabinetEntries = inCabinetEntries.filter(e => e.doctor_id === doctorInfo.id);
-
         // If we have patients but none selected, or the selected one is no longer in cabinet
-        if (myCabinetEntries.length > 0) {
-            const currentActive = myCabinetEntries[0];
-            if (!selectedEntry || !myCabinetEntries.find(e => e.id === selectedEntry.id)) {
+        if (activeCabinetEntries.length > 0) {
+            const currentActive = activeCabinetEntries[0];
+            if (!selectedEntry || !activeCabinetEntries.find(e => e.id === selectedEntry.id)) {
                 handleCompleteClick(currentActive);
             }
-        } else if (selectedEntry && !inCabinetEntries.find(e => e.id === selectedEntry.id)) {
+        } else if (selectedEntry && !activeCabinetEntries.find(e => e.id === selectedEntry.id)) {
             // Selected patient is gone from cabinet
             setSelectedEntry(null);
         }
-    }, [inCabinetEntries, doctorInfo, selectedEntry]);
+    }, [activeCabinetEntries, selectedEntry]);
 
     const handleCreateMedication = async () => {
         if (!newMedForm.name) {
@@ -849,7 +851,7 @@ const MedecinDashboard = () => {
                             </Button>
                         </div>
 
-                        {inCabinetEntries.filter(e => e.doctor_id === doctorInfo?.id).length > 0 ? (
+                        {activeCabinetEntries.length > 0 ? (
                             <div className="w-full">
                                 <Card className="border-none shadow-premium rounded-[2.5rem] overflow-hidden bg-white">
                                     <div className="p-10 border-b bg-slate-50/50">
@@ -862,11 +864,11 @@ const MedecinDashboard = () => {
                                                 <p className="text-xs text-slate-400 font-bold uppercase tracking-[0.3em] leading-tight mt-1">Patient · {selectedEntry?.patient_name}</p>
                                             </div>
 
-                                            {inCabinetEntries.filter(e => e.doctor_id === doctorInfo?.id).length > 1 && (
+                                            {activeCabinetEntries.length > 1 && (
                                                 <div className="mt-4 flex items-center gap-4 bg-white p-2.5 rounded-2xl border border-slate-100 shadow-sm">
                                                     <span className="text-[10px] font-black uppercase text-slate-400 pl-2 tracking-widest">Choisir Patient :</span>
                                                     <div className="flex gap-1.5">
-                                                        {inCabinetEntries.filter(e => e.doctor_id === doctorInfo?.id).map((entry, idx) => (
+                                                        {activeCabinetEntries.map((entry, idx) => (
                                                             <Button
                                                                 key={entry.id}
                                                                 variant={selectedEntry?.id === entry.id ? 'default' : 'ghost'}
